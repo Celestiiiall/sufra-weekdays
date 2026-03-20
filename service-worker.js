@@ -1,12 +1,12 @@
-const CACHE_NAME = "sufra-weekdays-v2";
+const CACHE_NAME = "sufra-weekdays-v3";
 const APP_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=20260320-2",
-  "./app.js?v=20260320-2",
-  "./manifest.webmanifest?v=20260320-2",
-  "./icon.svg?v=20260320-2",
-  "./service-worker.js?v=20260320-2",
+  "./styles.css?v=20260320-3",
+  "./app.js?v=20260320-3",
+  "./manifest.webmanifest?v=20260320-3",
+  "./icon.svg?v=20260320-3",
+  "./service-worker.js?v=20260320-3",
 ];
 
 self.addEventListener("install", (event) => {

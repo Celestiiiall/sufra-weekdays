@@ -5,6 +5,7 @@ A lightweight weekly meal planner built as a static web app.
 It includes:
 - Week setup with a title, Monday anchor date, household size, and weekly focus
 - Optional weekend days that can be turned on when needed
+- Optional night mode with a persistent theme toggle
 - Meal cards for breakfast, lunch, dinner, or snacks
 - Ingredients and notes per dish
 - Recipe video links saved with each meal

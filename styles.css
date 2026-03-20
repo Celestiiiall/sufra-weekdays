@@ -2,10 +2,14 @@
   color-scheme: light;
   --bg: #f7f0e4;
   --bg-deep: #efe3ce;
+  --bg-gradient: linear-gradient(180deg, #fbf6ee 0%, #f4e8d4 52%, #f8f2e7 100%);
+  --glow-a: rgba(219, 111, 46, 0.2);
+  --glow-b: rgba(96, 122, 85, 0.18);
   --ink: #1d1a17;
   --ink-soft: #655b4f;
   --panel: rgba(255, 250, 243, 0.82);
   --panel-strong: rgba(255, 248, 238, 0.94);
+  --panel-elevated: rgba(255, 252, 248, 0.95);
   --line: rgba(91, 79, 66, 0.14);
   --line-strong: rgba(91, 79, 66, 0.24);
   --accent: #db6f2e;
@@ -14,10 +18,65 @@
   --sage: #607a55;
   --sage-soft: rgba(96, 122, 85, 0.14);
   --berry: #7a3f43;
+  --hero-summary-top: rgba(40, 34, 27, 0.9);
+  --hero-summary-bottom: rgba(57, 44, 31, 0.86);
+  --hero-summary-ink: #fdf7f0;
+  --hero-summary-soft: rgba(253, 247, 240, 0.82);
+  --field-bg: rgba(255, 252, 248, 0.88);
+  --toggle-track: rgba(91, 79, 66, 0.16);
+  --toggle-thumb: #fffaf2;
+  --button-ghost-bg: rgba(255, 248, 240, 0.9);
+  --button-ghost-ink: var(--ink);
+  --button-ghost-line: var(--line-strong);
+  --day-column-top: rgba(255, 252, 248, 0.95);
+  --day-column-bottom: rgba(250, 242, 229, 0.9);
+  --card-bg: rgba(255, 255, 255, 0.7);
+  --embed-bg: rgba(255, 252, 248, 0.85);
+  --page-grain-line-a: rgba(29, 26, 23, 0.2);
+  --page-grain-line-b: rgba(29, 26, 23, 0.14);
   --shadow: 0 24px 60px rgba(58, 41, 25, 0.12);
   --radius-lg: 26px;
   --radius-md: 18px;
   --radius-sm: 12px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1420;
+  --bg-deep: #111827;
+  --bg-gradient: linear-gradient(180deg, #0a101a 0%, #121a28 54%, #162131 100%);
+  --glow-a: rgba(219, 111, 46, 0.18);
+  --glow-b: rgba(96, 122, 85, 0.16);
+  --ink: #f5efe3;
+  --ink-soft: #b8ad9c;
+  --panel: rgba(19, 27, 41, 0.82);
+  --panel-strong: rgba(22, 31, 47, 0.94);
+  --panel-elevated: rgba(23, 33, 49, 0.95);
+  --line: rgba(214, 197, 173, 0.12);
+  --line-strong: rgba(214, 197, 173, 0.22);
+  --accent: #f08b48;
+  --accent-deep: #cc6a24;
+  --accent-soft: rgba(240, 139, 72, 0.14);
+  --sage: #9ec38f;
+  --sage-soft: rgba(158, 195, 143, 0.14);
+  --berry: #f0b0b0;
+  --hero-summary-top: rgba(245, 237, 225, 0.92);
+  --hero-summary-bottom: rgba(226, 213, 194, 0.86);
+  --hero-summary-ink: #1e1a17;
+  --hero-summary-soft: rgba(30, 26, 23, 0.7);
+  --field-bg: rgba(16, 24, 37, 0.9);
+  --toggle-track: rgba(214, 197, 173, 0.18);
+  --toggle-thumb: #f8f1e4;
+  --button-ghost-bg: rgba(20, 29, 44, 0.96);
+  --button-ghost-ink: #f5efe3;
+  --button-ghost-line: rgba(214, 197, 173, 0.2);
+  --day-column-top: rgba(23, 33, 49, 0.95);
+  --day-column-bottom: rgba(18, 26, 39, 0.9);
+  --card-bg: rgba(12, 19, 31, 0.66);
+  --embed-bg: rgba(15, 23, 35, 0.92);
+  --page-grain-line-a: rgba(245, 239, 227, 0.08);
+  --page-grain-line-b: rgba(245, 239, 227, 0.05);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -34,11 +93,12 @@ body {
   font-family: "Manrope", "Avenir Next", "Segoe UI", sans-serif;
   color: var(--ink);
   background:
-    radial-gradient(circle at 15% 18%, rgba(219, 111, 46, 0.22) 0%, transparent 26%),
-    radial-gradient(circle at 82% 14%, rgba(96, 122, 85, 0.18) 0%, transparent 24%),
-    linear-gradient(180deg, #fbf6ee 0%, #f4e8d4 52%, #f8f2e7 100%);
+    radial-gradient(circle at 15% 18%, var(--glow-a) 0%, transparent 26%),
+    radial-gradient(circle at 82% 14%, var(--glow-b) 0%, transparent 24%),
+    var(--bg-gradient);
   position: relative;
   overflow-x: hidden;
+  transition: background 180ms ease, color 180ms ease;
 }
 
 .page-grain {
@@ -47,8 +107,8 @@ body {
   pointer-events: none;
   opacity: 0.08;
   background-image:
-    linear-gradient(transparent 0, transparent 97%, rgba(29, 26, 23, 0.2) 100%),
-    linear-gradient(90deg, transparent 0, transparent 97%, rgba(29, 26, 23, 0.14) 100%);
+    linear-gradient(transparent 0, transparent 97%, var(--page-grain-line-a) 100%),
+    linear-gradient(90deg, transparent 0, transparent 97%, var(--page-grain-line-b) 100%);
   background-size: 6px 6px;
 }
 
@@ -63,7 +123,7 @@ body {
 .glow-a {
   width: 320px;
   height: 320px;
-  background: rgba(219, 111, 46, 0.2);
+  background: var(--glow-a);
   top: -90px;
   left: -80px;
 }
@@ -71,7 +131,7 @@ body {
 .glow-b {
   width: 300px;
   height: 300px;
-  background: rgba(96, 122, 85, 0.18);
+  background: var(--glow-b);
   right: -80px;
   bottom: 12%;
 }
@@ -116,8 +176,15 @@ body {
   gap: 22px;
   padding: 30px;
   background:
-    linear-gradient(135deg, rgba(255, 251, 246, 0.94), rgba(246, 231, 209, 0.9)),
+    linear-gradient(135deg, var(--panel-elevated), var(--panel)),
     var(--panel);
+}
+
+.hero-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
 }
 
 .eyebrow,
@@ -190,9 +257,9 @@ h4 {
   padding: 22px;
   border-radius: 22px;
   background:
-    linear-gradient(180deg, rgba(40, 34, 27, 0.9), rgba(57, 44, 31, 0.86)),
+    linear-gradient(180deg, var(--hero-summary-top), var(--hero-summary-bottom)),
     var(--panel-strong);
-  color: #fdf7f0;
+  color: var(--hero-summary-ink);
   align-self: stretch;
   display: grid;
   gap: 10px;
@@ -201,7 +268,15 @@ h4 {
 .hero-summary .summary-label,
 .hero-summary .hero-plan-name,
 .hero-summary .plan-focus-display {
-  color: rgba(253, 247, 240, 0.82);
+  color: var(--hero-summary-soft);
+}
+
+.theme-toggle {
+  background: var(--button-ghost-bg);
+  color: var(--button-ghost-ink);
+  border: 1px solid var(--button-ghost-line);
+  box-shadow: none;
+  min-height: 42px;
 }
 
 #week-range {
@@ -217,7 +292,7 @@ h4 {
   gap: 18px;
   align-items: center;
   background:
-    linear-gradient(135deg, rgba(255, 252, 246, 0.96), rgba(241, 231, 213, 0.92)),
+    linear-gradient(135deg, var(--panel-elevated), var(--panel)),
     var(--panel);
 }
 
@@ -303,7 +378,7 @@ textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: rgba(255, 252, 248, 0.88);
+  background: var(--field-bg);
   color: var(--ink);
   padding: 12px 14px;
   transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
@@ -330,7 +405,7 @@ textarea:focus {
   padding: 15px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: rgba(255, 252, 248, 0.72);
+  background: var(--field-bg);
 }
 
 .toggle-copy {
@@ -351,7 +426,7 @@ textarea:focus {
   padding: 0;
   border-radius: 999px;
   border: 1px solid rgba(91, 79, 66, 0.16);
-  background: rgba(91, 79, 66, 0.16);
+  background: var(--toggle-track);
   position: relative;
   cursor: pointer;
   box-shadow: none;
@@ -365,7 +440,7 @@ textarea:focus {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #fffaf2;
+  background: var(--toggle-thumb);
   box-shadow: 0 3px 10px rgba(29, 26, 23, 0.18);
   transition: transform 140ms ease;
 }
@@ -410,9 +485,9 @@ button:active {
 }
 
 .ghost {
-  background: rgba(255, 248, 240, 0.9);
-  color: var(--ink);
-  border: 1px solid var(--line-strong);
+  background: var(--button-ghost-bg);
+  color: var(--button-ghost-ink);
+  border: 1px solid var(--button-ghost-line);
 }
 
 .ghost.danger {
@@ -475,7 +550,7 @@ button:active {
 
 .support-panel {
   background:
-    linear-gradient(180deg, rgba(255, 251, 245, 0.98), rgba(246, 235, 216, 0.9)),
+    linear-gradient(180deg, var(--panel-elevated), var(--panel)),
     var(--panel);
 }
 
@@ -513,7 +588,7 @@ button:active {
   gap: 16px;
   min-height: 100%;
   background:
-    linear-gradient(180deg, rgba(255, 252, 248, 0.95), rgba(250, 242, 229, 0.9)),
+    linear-gradient(180deg, var(--day-column-top), var(--day-column-bottom)),
     var(--panel);
 }
 
@@ -546,7 +621,7 @@ button:active {
 }
 
 .meal-card {
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--card-bg);
   border: 1px solid rgba(91, 79, 66, 0.12);
   border-radius: 18px;
   padding: 16px;
@@ -631,7 +706,7 @@ button:active {
 .embed-preview {
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: rgba(255, 252, 248, 0.85);
+  background: var(--embed-bg);
   overflow: hidden;
 }
 
@@ -689,6 +764,11 @@ button:active {
 @media (max-width: 900px) {
   .hero {
     grid-template-columns: 1fr;
+  }
+
+  .hero-topline {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .meal-form-grid {

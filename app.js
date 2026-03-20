@@ -1,5 +1,10 @@
 const STORAGE_KEY = "sufra-weekdays-v1";
+const THEME_STORAGE_KEY = "sufra-weekdays-theme";
 const SHARE_HASH_PREFIX = "#share=";
+const THEME_COLORS = {
+  light: "#efe3ce",
+  dark: "#111827",
+};
 
 const CORE_DAYS = [
   { key: "monday", label: "Monday" },
@@ -28,6 +33,7 @@ const mealTypeOrder = new Map(MEAL_TYPES.map((type, index) => [type.key, index])
 
 const dom = {
   planForm: document.getElementById("plan-form"),
+  themeToggle: document.getElementById("theme-toggle"),
   planTitle: document.getElementById("plan-title"),
   weekOf: document.getElementById("week-of"),
   householdSize: document.getElementById("household-size"),
@@ -77,12 +83,14 @@ let pendingSharedPayload = readSharedPayloadFromLocation();
 init();
 
 function init() {
+  applyTheme(loadThemePreference());
   syncPlanForm();
   syncSelectableDays();
   syncFilterControls();
   resetMealForm();
   renderSharedNotice();
 
+  dom.themeToggle.addEventListener("click", toggleTheme);
   dom.planForm.addEventListener("submit", handleSavePlan);
   dom.mealForm.addEventListener("submit", handleSubmitMeal);
   dom.cancelEdit.addEventListener("click", () => resetMealForm({ preserveDay: true }));
@@ -117,6 +125,35 @@ function init() {
 
   render();
   registerServiceWorker();
+}
+
+function loadThemePreference() {
+  const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+  if (savedTheme === "dark" || savedTheme === "light") {
+    return savedTheme;
+  }
+
+  return "light";
+}
+
+function toggleTheme() {
+  const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(nextTheme);
+}
+
+function applyTheme(theme) {
+  const normalizedTheme = theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = normalizedTheme;
+  localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
+
+  const isDark = normalizedTheme === "dark";
+  dom.themeToggle.textContent = isDark ? "Day Mode" : "Night Mode";
+  dom.themeToggle.setAttribute("aria-pressed", String(isDark));
+
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeMeta) {
+    themeMeta.setAttribute("content", THEME_COLORS[normalizedTheme]);
+  }
 }
 
 function handleSavePlan(event) {
@@ -1257,7 +1294,7 @@ function registerServiceWorker() {
 
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=20260320-2", { updateViaCache: "none" })
+      .register("./service-worker.js?v=20260320-3", { updateViaCache: "none" })
       .catch(() => {});
   });
 }
