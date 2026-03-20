@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sufra Weekdays">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff7ec" />
+      <stop offset="1" stop-color="#efd9b7" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#db6f2e" />
+      <stop offset="1" stop-color="#607a55" />
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="128" fill="url(#bg)" />
+  <rect x="84" y="86" width="344" height="340" rx="42" fill="#fffaf2" stroke="#e5c89a" stroke-width="12" />
+  <rect x="120" y="122" width="272" height="22" rx="11" fill="url(#accent)" opacity="0.95" />
+  <rect x="120" y="164" width="144" height="18" rx="9" fill="#d8bea0" />
+  <rect x="120" y="198" width="176" height="18" rx="9" fill="#d8bea0" />
+
+  <circle cx="256" cy="300" r="92" fill="#f5e4ca" stroke="#cfb083" stroke-width="14" />
+  <path
+    d="M188 300c12-28 39-46 68-46s56 18 68 46"
+    fill="none"
+    stroke="#8d6940"
+    stroke-linecap="round"
+    stroke-width="16"
+  />
+  <path
+    d="M202 318h108c14 0 24 10 24 24 0 14-10 26-24 28H202c-14-2-24-14-24-28 0-14 10-24 24-24Z"
+    fill="#fff7ef"
+    stroke="#cfb083"
+    stroke-width="10"
+  />
+
+  <circle cx="350" cy="352" r="54" fill="url(#accent)" />
+  <path d="M337 328v48l38-24-38-24Z" fill="#fff7ef" />
+</svg>

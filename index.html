@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#efe3ce" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Sufra Weekdays" />
+    <title>Sufra Weekdays</title>
+    <link rel="manifest" href="manifest.webmanifest?v=20250321-1" />
+    <link rel="icon" href="icon.svg?v=20250321-1" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon.svg?v=20250321-1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css?v=20250321-1" />
+  </head>
+  <body>
+    <div class="page-glow glow-a"></div>
+    <div class="page-glow glow-b"></div>
+    <div class="page-grain"></div>
+
+    <main class="page-shell">
+      <header class="panel hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Sufra Weekdays</p>
+          <h1>Plan weekday meals and keep recipe videos one tap away.</h1>
+          <p class="hero-text">
+            Build a realistic Monday to Friday menu, save dish notes, and attach recipe videos
+            that can open externally or preview inline when the source supports embedding.
+          </p>
+        </div>
+
+        <div class="hero-summary">
+          <p class="summary-label">Week snapshot</p>
+          <strong id="week-range">Monday to Friday</strong>
+          <p id="hero-plan-name" class="hero-plan-name">Weekday Flow</p>
+          <p id="plan-focus-display" class="plan-focus-display">
+            Add a week focus so the planner stays practical.
+          </p>
+        </div>
+      </header>
+
+      <section class="layout-grid">
+        <div class="main-stack">
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="section-kicker">Set the week</p>
+                <h2>Week Setup</h2>
+              </div>
+              <p class="section-copy">
+                Pick the Monday anchor, give the plan a name, and add a short focus for the week.
+              </p>
+            </div>
+
+            <form id="plan-form" class="setup-form">
+              <label>
+                Plan Name
+                <input id="plan-title" type="text" maxlength="60" placeholder="After-work dinners" />
+              </label>
+              <label>
+                Week Of
+                <input id="week-of" type="date" />
+              </label>
+              <label>
+                Household Size
+                <input id="household-size" type="number" min="1" max="20" step="1" />
+              </label>
+              <label class="field-span">
+                Week Focus
+                <textarea
+                  id="plan-note"
+                  rows="3"
+                  maxlength="220"
+                  placeholder="Fast cleanup, leftovers by Thursday, two lighter lunches."
+                ></textarea>
+              </label>
+
+              <div class="button-row">
+                <button id="save-plan" type="submit">Save Week</button>
+                <button id="export-plan" class="ghost" type="button">Export JSON</button>
+                <button id="clear-plan" class="ghost danger" type="button">Clear Week</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="section-kicker">Add meals</p>
+                <h2 id="composer-heading">Compose a Dish</h2>
+              </div>
+              <p class="section-copy">
+                Paste one recipe video link per line. YouTube and Vimeo can preview inline; all
+                other links stay attached as quick-open references.
+              </p>
+            </div>
+
+            <form id="meal-form" class="meal-form">
+              <div class="meal-form-grid">
+                <label>
+                  Weekday
+                  <select id="meal-day">
+                    <option value="monday">Monday</option>
+                    <option value="tuesday">Tuesday</option>
+                    <option value="wednesday">Wednesday</option>
+                    <option value="thursday">Thursday</option>
+                    <option value="friday">Friday</option>
+                  </select>
+                </label>
+
+                <label>
+                  Meal Slot
+                  <select id="meal-type">
+                    <option value="breakfast">Breakfast</option>
+                    <option value="lunch">Lunch</option>
+                    <option value="dinner">Dinner</option>
+                    <option value="snack">Snack</option>
+                  </select>
+                </label>
+
+                <label class="field-span">
+                  Dish Name
+                  <input
+                    id="meal-title"
+                    type="text"
+                    maxlength="80"
+                    required
+                    placeholder="Harissa salmon bowls"
+                  />
+                </label>
+
+                <label>
+                  Prep Minutes
+                  <input id="meal-prep" type="number" min="0" max="600" step="5" placeholder="25" />
+                </label>
+
+                <label class="field-span">
+                  Ingredients
+                  <textarea
+                    id="meal-ingredients"
+                    rows="3"
+                    maxlength="240"
+                    placeholder="salmon, harissa, yogurt, cucumber, rice"
+                  ></textarea>
+                </label>
+
+                <label class="field-span">
+                  Notes
+                  <textarea
+                    id="meal-notes"
+                    rows="3"
+                    maxlength="320"
+                    placeholder="Marinate the salmon the night before and reuse the yogurt sauce for lunch."
+                  ></textarea>
+                </label>
+
+                <label class="field-span">
+                  Recipe Video Links
+                  <textarea
+                    id="meal-links"
+                    rows="4"
+                    placeholder="https://youtu.be/example&#10;https://www.instagram.com/example"
+                  ></textarea>
+                </label>
+              </div>
+
+              <input id="editing-meal-id" type="hidden" />
+
+              <div class="button-row">
+                <button id="submit-meal" type="submit">Add to Week</button>
+                <button id="cancel-edit" class="ghost hidden" type="button">Cancel Edit</button>
+              </div>
+            </form>
+          </section>
+        </div>
+
+        <aside class="side-stack">
+          <section class="stats-grid" aria-live="polite">
+            <article class="panel stat-card">
+              <p>Planned Meals</p>
+              <strong id="stat-meals">0</strong>
+            </article>
+            <article class="panel stat-card">
+              <p>Weekdays Covered</p>
+              <strong id="stat-days">0 / 5</strong>
+            </article>
+            <article class="panel stat-card">
+              <p>Video Links</p>
+              <strong id="stat-links">0</strong>
+            </article>
+            <article class="panel stat-card">
+              <p>Average Prep</p>
+              <strong id="stat-prep">-</strong>
+            </article>
+          </section>
+
+          <section class="panel">
+            <div class="section-head compact">
+              <div>
+                <p class="section-kicker">Filter view</p>
+                <h2>Find a Meal Fast</h2>
+              </div>
+            </div>
+
+            <div class="filter-grid">
+              <label>
+                Search
+                <input id="search-query" type="search" placeholder="Search dish, notes, ingredient" />
+              </label>
+              <label>
+                Day
+                <select id="filter-day">
+                  <option value="all">All weekdays</option>
+                  <option value="monday">Monday</option>
+                  <option value="tuesday">Tuesday</option>
+                  <option value="wednesday">Wednesday</option>
+                  <option value="thursday">Thursday</option>
+                  <option value="friday">Friday</option>
+                </select>
+              </label>
+              <label>
+                Link Type
+                <select id="filter-links">
+                  <option value="all">Everything</option>
+                  <option value="video">With links</option>
+                  <option value="embed">Embeddable only</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section class="panel support-panel">
+            <p class="section-kicker">Link behavior</p>
+            <h2>Recipe Videos</h2>
+            <p>
+              Supported embeds render inline previews inside each meal card. Unsupported sources are
+              still saved as clean external links so the workflow never breaks.
+            </p>
+            <ul class="support-list">
+              <li>YouTube links preview inline.</li>
+              <li>Vimeo links preview inline.</li>
+              <li>Instagram, TikTok, and blog URLs stay attached as quick-open links.</li>
+            </ul>
+          </section>
+        </aside>
+      </section>
+
+      <section class="board-heading">
+        <div>
+          <p class="section-kicker">Week board</p>
+          <h2>Monday to Friday Layout</h2>
+        </div>
+        <p class="section-copy board-copy">
+          Weekend is intentionally left out so the planner stays focused on routine days.
+        </p>
+      </section>
+
+      <section id="weekday-board" class="weekday-board" aria-live="polite"></section>
+    </main>
+
+    <template id="day-column-template">
+      <section class="panel day-column">
+        <header class="day-header">
+          <div>
+            <p class="day-name"></p>
+            <h3 class="day-date"></h3>
+          </div>
+          <p class="day-summary"></p>
+        </header>
+        <div class="day-meals"></div>
+        <p class="day-empty">No meals planned for this day yet.</p>
+      </section>
+    </template>
+
+    <template id="meal-card-template">
+      <article class="meal-card">
+        <div class="meal-topline">
+          <span class="meal-type-pill"></span>
+          <span class="meal-prep"></span>
+        </div>
+        <h4 class="meal-card-title"></h4>
+        <p class="meal-card-notes"></p>
+        <ul class="ingredient-chips"></ul>
+        <div class="video-link-row"></div>
+        <div class="embed-stack"></div>
+        <div class="meal-actions">
+          <button class="action-button edit" type="button">Edit</button>
+          <button class="action-button remove" type="button">Remove</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js?v=20250321-1"></script>
+  </body>
+</html>
