@@ -1,7 +1,7 @@
 {
   "name": "Sufra Weekdays",
   "short_name": "Sufra",
-  "description": "A weekday meal planner with recipe video links and inline previews for supported sources.",
+  "description": "A weekly meal planner with optional weekend days, shareable plans, recipe video links, and inline previews for supported sources.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -8,16 +8,16 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Sufra Weekdays" />
     <title>Sufra Weekdays</title>
-    <link rel="manifest" href="manifest.webmanifest?v=20250321-1" />
-    <link rel="icon" href="icon.svg?v=20250321-1" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="icon.svg?v=20250321-1" />
+    <link rel="manifest" href="manifest.webmanifest?v=20260320-2" />
+    <link rel="icon" href="icon.svg?v=20260320-2" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon.svg?v=20260320-2" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20250321-1" />
+    <link rel="stylesheet" href="styles.css?v=20260320-2" />
   </head>
   <body>
     <div class="page-glow glow-a"></div>
@@ -28,10 +28,11 @@
       <header class="panel hero">
         <div class="hero-copy">
           <p class="eyebrow">Sufra Weekdays</p>
-          <h1>Plan weekday meals and keep recipe videos one tap away.</h1>
+          <h1>Plan the week and keep recipe videos one tap away.</h1>
           <p class="hero-text">
-            Build a realistic Monday to Friday menu, save dish notes, and attach recipe videos
-            that can open externally or preview inline when the source supports embedding.
+            Build a realistic meal plan, switch weekend days on only when you need them, and
+            attach recipe videos that can open externally or preview inline when the source
+            supports embedding.
           </p>
         </div>
 
@@ -45,6 +46,17 @@
         </div>
       </header>
 
+      <section id="shared-banner" class="panel share-banner hidden" aria-live="polite">
+        <div class="share-banner-copy">
+          <p class="section-kicker">Shared week detected</p>
+          <p id="shared-banner-text" class="share-banner-text"></p>
+        </div>
+        <div class="share-actions">
+          <button id="import-shared-link" type="button">Import Shared Week</button>
+          <button id="dismiss-shared-link" class="ghost" type="button">Dismiss</button>
+        </div>
+      </section>
+
       <section class="layout-grid">
         <div class="main-stack">
           <section class="panel">
@@ -54,14 +66,15 @@
                 <h2>Week Setup</h2>
               </div>
               <p class="section-copy">
-                Pick the Monday anchor, give the plan a name, and add a short focus for the week.
+                Pick the Monday anchor, give the plan a name, optionally turn on the weekend, and
+                keep the week focused.
               </p>
             </div>
 
             <form id="plan-form" class="setup-form">
               <label>
                 Plan Name
-                <input id="plan-title" type="text" maxlength="60" placeholder="After-work dinners" />
+                <input id="plan-title" type="text" maxlength="60" placeholder="Family dinner flow" />
               </label>
               <label>
                 Week Of
@@ -71,21 +84,37 @@
                 Household Size
                 <input id="household-size" type="number" min="1" max="20" step="1" />
               </label>
+              <label class="toggle-card field-span" for="include-weekend">
+                <span class="toggle-copy">
+                  <span class="toggle-title">Include Weekend</span>
+                  <span class="toggle-note">
+                    Turn this on when Saturday and Sunday should appear in the board, filters, and
+                    meal composer.
+                  </span>
+                </span>
+                <input id="include-weekend" class="toggle-switch" type="checkbox" />
+              </label>
               <label class="field-span">
                 Week Focus
                 <textarea
                   id="plan-note"
                   rows="3"
                   maxlength="220"
-                  placeholder="Fast cleanup, leftovers by Thursday, two lighter lunches."
+                  placeholder="Keep dinners familiar, batch rice early, and leave Saturday open for guests."
                 ></textarea>
               </label>
 
               <div class="button-row">
                 <button id="save-plan" type="submit">Save Week</button>
+                <button id="share-plan" type="button">Share Week</button>
+                <button id="import-shared" class="ghost" type="button">Import Shared Link</button>
                 <button id="export-plan" class="ghost" type="button">Export JSON</button>
                 <button id="clear-plan" class="ghost danger" type="button">Clear Week</button>
               </div>
+
+              <p id="share-feedback" class="helper-line">
+                Share by link, native share sheet, or JSON export for larger plans.
+              </p>
             </form>
           </section>
 
@@ -104,14 +133,8 @@
             <form id="meal-form" class="meal-form">
               <div class="meal-form-grid">
                 <label>
-                  Weekday
-                  <select id="meal-day">
-                    <option value="monday">Monday</option>
-                    <option value="tuesday">Tuesday</option>
-                    <option value="wednesday">Wednesday</option>
-                    <option value="thursday">Thursday</option>
-                    <option value="friday">Friday</option>
-                  </select>
+                  Day
+                  <select id="meal-day"></select>
                 </label>
 
                 <label>
@@ -131,13 +154,13 @@
                     type="text"
                     maxlength="80"
                     required
-                    placeholder="Harissa salmon bowls"
+                    placeholder="Chicken machboos"
                   />
                 </label>
 
                 <label>
                   Prep Minutes
-                  <input id="meal-prep" type="number" min="0" max="600" step="5" placeholder="25" />
+                  <input id="meal-prep" type="number" min="0" max="600" step="5" placeholder="45" />
                 </label>
 
                 <label class="field-span">
@@ -146,7 +169,7 @@
                     id="meal-ingredients"
                     rows="3"
                     maxlength="240"
-                    placeholder="salmon, harissa, yogurt, cucumber, rice"
+                    placeholder="rice, chicken, dried lime, onions, tomato, machboos spices"
                   ></textarea>
                 </label>
 
@@ -156,7 +179,7 @@
                     id="meal-notes"
                     rows="3"
                     maxlength="320"
-                    placeholder="Marinate the salmon the night before and reuse the yogurt sauce for lunch."
+                    placeholder="Use the same stock for the rice and chicken, and keep extra daqoos ready for the next day."
                   ></textarea>
                 </label>
 
@@ -187,7 +210,7 @@
               <strong id="stat-meals">0</strong>
             </article>
             <article class="panel stat-card">
-              <p>Weekdays Covered</p>
+              <p>Days Covered</p>
               <strong id="stat-days">0 / 5</strong>
             </article>
             <article class="panel stat-card">
@@ -215,14 +238,7 @@
               </label>
               <label>
                 Day
-                <select id="filter-day">
-                  <option value="all">All weekdays</option>
-                  <option value="monday">Monday</option>
-                  <option value="tuesday">Tuesday</option>
-                  <option value="wednesday">Wednesday</option>
-                  <option value="thursday">Thursday</option>
-                  <option value="friday">Friday</option>
-                </select>
+                <select id="filter-day"></select>
               </label>
               <label>
                 Link Type
@@ -233,6 +249,21 @@
                 </select>
               </label>
             </div>
+          </section>
+
+          <section class="panel support-panel">
+            <p class="section-kicker">Share with others</p>
+            <h2>Pass Around the Plan</h2>
+            <p>
+              Share Week generates a link containing the current plan so someone else can import
+              the same meals on their device. If the plan gets too large for a link, Export JSON
+              is the fallback.
+            </p>
+            <ul class="support-list">
+              <li>Share links open directly on the site.</li>
+              <li>Recipients can import the shared week into their own planner.</li>
+              <li>Weekend settings travel with the shared plan.</li>
+            </ul>
           </section>
 
           <section class="panel support-panel">
@@ -254,10 +285,11 @@
       <section class="board-heading">
         <div>
           <p class="section-kicker">Week board</p>
-          <h2>Monday to Friday Layout</h2>
+          <h2 id="board-title">Weekday Layout</h2>
         </div>
-        <p class="section-copy board-copy">
-          Weekend is intentionally left out so the planner stays focused on routine days.
+        <p id="board-copy" class="section-copy board-copy">
+          Saturday and Sunday stay optional, so the planner can stay weekday-first when you want it
+          to.
         </p>
       </section>
 
@@ -296,6 +328,6 @@
       </article>
     </template>
 
-    <script src="app.js?v=20250321-1"></script>
+    <script src="app.js?v=20260320-2"></script>
   </body>
 </html>

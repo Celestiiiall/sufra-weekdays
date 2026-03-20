@@ -1,13 +1,15 @@
 # Sufra Weekdays
 
-A lightweight weekday meal planner built as a static web app.
+A lightweight weekly meal planner built as a static web app.
 
-It is designed for Monday to Friday planning and includes:
+It includes:
 - Week setup with a title, Monday anchor date, household size, and weekly focus
+- Optional weekend days that can be turned on when needed
 - Meal cards for breakfast, lunch, dinner, or snacks
 - Ingredients and notes per dish
 - Recipe video links saved with each meal
 - Inline embeds for supported sources like YouTube and Vimeo
+- Shareable week links so one person can send the current plan to someone else
 - External link attachments for unsupported sources like Instagram or TikTok
 - Local `localStorage` persistence
 - Installable PWA support
@@ -18,8 +20,10 @@ No dependencies are required.
 
 1. Open `index.html` in a browser.
 2. Save your week details.
-3. Add meals for Monday through Friday.
-4. Attach recipe video links one per line in the meal form.
+3. Add meals for the visible days of the week.
+4. Turn `Include Weekend` on if you want Saturday and Sunday in the planner.
+5. Attach recipe video links one per line in the meal form.
+6. Use `Share Week` to generate a link someone else can import.
 
 ## Data storage
 
@@ -36,6 +40,12 @@ This repo includes a GitHub Actions workflow for static deployment.
 Your Pages URL will be:
 
 `https://<YOUR_GITHUB_USERNAME>.github.io/sufra-weekdays/`
+
+## Sharing
+
+- `Share Week` creates a link containing the current plan data.
+- Opening that link on another device shows an import prompt for the shared week.
+- If the plan grows too large for a URL, use `Export JSON` as the fallback.
 
 ## Notes on recipe videos
 

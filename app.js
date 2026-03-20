@@ -1,11 +1,21 @@
 const STORAGE_KEY = "sufra-weekdays-v1";
-const WEEKDAYS = [
-  { key: "monday", label: "Monday", shortLabel: "Mon" },
-  { key: "tuesday", label: "Tuesday", shortLabel: "Tue" },
-  { key: "wednesday", label: "Wednesday", shortLabel: "Wed" },
-  { key: "thursday", label: "Thursday", shortLabel: "Thu" },
-  { key: "friday", label: "Friday", shortLabel: "Fri" },
+const SHARE_HASH_PREFIX = "#share=";
+
+const CORE_DAYS = [
+  { key: "monday", label: "Monday" },
+  { key: "tuesday", label: "Tuesday" },
+  { key: "wednesday", label: "Wednesday" },
+  { key: "thursday", label: "Thursday" },
+  { key: "friday", label: "Friday" },
 ];
+const WEEKEND_DAYS = [
+  { key: "saturday", label: "Saturday" },
+  { key: "sunday", label: "Sunday" },
+];
+const ALL_DAYS = [...CORE_DAYS, ...WEEKEND_DAYS].map((day, index) => ({
+  ...day,
+  offset: index,
+}));
 const MEAL_TYPES = [
   { key: "breakfast", label: "Breakfast" },
   { key: "lunch", label: "Lunch" },
@@ -13,7 +23,7 @@ const MEAL_TYPES = [
   { key: "snack", label: "Snack" },
 ];
 
-const weekdayOrder = new Map(WEEKDAYS.map((day, index) => [day.key, index]));
+const dayOrder = new Map(ALL_DAYS.map((day, index) => [day.key, index]));
 const mealTypeOrder = new Map(MEAL_TYPES.map((type, index) => [type.key, index]));
 
 const dom = {
@@ -21,12 +31,20 @@ const dom = {
   planTitle: document.getElementById("plan-title"),
   weekOf: document.getElementById("week-of"),
   householdSize: document.getElementById("household-size"),
+  includeWeekend: document.getElementById("include-weekend"),
   planNote: document.getElementById("plan-note"),
   weekRange: document.getElementById("week-range"),
   heroPlanName: document.getElementById("hero-plan-name"),
   planFocusDisplay: document.getElementById("plan-focus-display"),
+  sharePlan: document.getElementById("share-plan"),
+  importShared: document.getElementById("import-shared"),
   exportPlan: document.getElementById("export-plan"),
   clearPlan: document.getElementById("clear-plan"),
+  shareFeedback: document.getElementById("share-feedback"),
+  sharedBanner: document.getElementById("shared-banner"),
+  sharedBannerText: document.getElementById("shared-banner-text"),
+  importSharedLink: document.getElementById("import-shared-link"),
+  dismissSharedLink: document.getElementById("dismiss-shared-link"),
   mealForm: document.getElementById("meal-form"),
   composerHeading: document.getElementById("composer-heading"),
   mealDay: document.getElementById("meal-day"),
@@ -46,25 +64,38 @@ const dom = {
   statDays: document.getElementById("stat-days"),
   statLinks: document.getElementById("stat-links"),
   statPrep: document.getElementById("stat-prep"),
+  boardTitle: document.getElementById("board-title"),
+  boardCopy: document.getElementById("board-copy"),
   weekdayBoard: document.getElementById("weekday-board"),
   dayColumnTemplate: document.getElementById("day-column-template"),
   mealCardTemplate: document.getElementById("meal-card-template"),
 };
 
 const state = loadState();
+let pendingSharedPayload = readSharedPayloadFromLocation();
 
 init();
 
 function init() {
   syncPlanForm();
+  syncSelectableDays();
   syncFilterControls();
   resetMealForm();
+  renderSharedNotice();
 
   dom.planForm.addEventListener("submit", handleSavePlan);
   dom.mealForm.addEventListener("submit", handleSubmitMeal);
   dom.cancelEdit.addEventListener("click", () => resetMealForm({ preserveDay: true }));
+  dom.sharePlan.addEventListener("click", handleSharePlan);
+  dom.importShared.addEventListener("click", handleImportPrompt);
   dom.exportPlan.addEventListener("click", exportPlanAsJson);
   dom.clearPlan.addEventListener("click", clearWeek);
+  dom.importSharedLink.addEventListener("click", () => {
+    if (pendingSharedPayload) {
+      importSharedPayload(pendingSharedPayload);
+    }
+  });
+  dom.dismissSharedLink.addEventListener("click", () => dismissSharedNotice({ clearHash: true }));
 
   dom.searchQuery.addEventListener("input", (event) => {
     state.filters.query = normalizeText(event.target.value);
@@ -73,7 +104,7 @@ function init() {
   });
 
   dom.filterDay.addEventListener("change", (event) => {
-    state.filters.day = normalizeFilterDay(event.target.value);
+    state.filters.day = normalizeFilterDay(event.target.value, getPlanDays());
     saveState();
     render();
   });
@@ -91,9 +122,30 @@ function init() {
 function handleSavePlan(event) {
   event.preventDefault();
 
-  state.plan = collectPlanFromForm();
+  const nextPlan = collectPlanFromForm();
+
+  if (!nextPlan.includeWeekend && state.plan.includeWeekend) {
+    const weekendMeals = state.meals.filter((meal) => isWeekendDay(meal.day));
+    if (weekendMeals.length) {
+      const shouldRemoveWeekendMeals = window.confirm(
+        "Turning weekend off will remove Saturday and Sunday meals from this plan. Press OK to remove them or Cancel to keep weekend enabled.",
+      );
+
+      if (!shouldRemoveWeekendMeals) {
+        nextPlan.includeWeekend = true;
+      } else {
+        state.meals = state.meals.filter((meal) => !isWeekendDay(meal.day));
+      }
+    }
+  }
+
+  state.plan = nextPlan;
+  state.filters.day = normalizeFilterDay(state.filters.day, getPlanDays(nextPlan));
+
   saveState();
   syncPlanForm();
+  syncSelectableDays();
+  syncFilterControls();
   render();
 }
 
@@ -120,6 +172,62 @@ function handleSubmitMeal(event) {
   saveState();
   render();
   resetMealForm({ preserveDay: true });
+  setShareFeedback("Week saved locally. Share it when you are ready.", "muted");
+}
+
+async function handleSharePlan() {
+  if (!state.meals.length) {
+    setShareFeedback("Add at least one meal before sharing the week.", "warn");
+    return;
+  }
+
+  const shareUrl = buildShareUrl();
+  if (!shareUrl) {
+    setShareFeedback("This plan is too large for a share link. Use Export JSON instead.", "warn");
+    return;
+  }
+
+  const shareData = {
+    title: `${state.plan.title} - Sufra Weekdays`,
+    text: `Meal plan for ${formatWeekRange(state.plan)}`,
+    url: shareUrl,
+  };
+
+  if (navigator.share) {
+    try {
+      await navigator.share(shareData);
+      setShareFeedback("Week shared.", "ok");
+      return;
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        return;
+      }
+    }
+  }
+
+  const copied = await copyText(shareUrl);
+  if (copied) {
+    setShareFeedback("Share link copied to clipboard.", "ok");
+    return;
+  }
+
+  window.prompt("Copy this share link.", shareUrl);
+  setShareFeedback("Share link ready.", "ok");
+}
+
+function handleImportPrompt() {
+  const value = window.prompt("Paste a Sufra share link or token.");
+  if (!value) {
+    return;
+  }
+
+  const payload = decodeSharedInput(value);
+  if (!payload) {
+    setShareFeedback("That share link could not be read.", "warn");
+    return;
+  }
+
+  importSharedPayload(payload);
 }
 
 function collectPlanFromForm() {
@@ -127,6 +235,7 @@ function collectPlanFromForm() {
     title: normalizeTitle(dom.planTitle.value, "Weekday Flow"),
     weekOf: normalizeWeekOf(dom.weekOf.value || getMondayInput()),
     householdSize: normalizeHouseholdSize(dom.householdSize.value),
+    includeWeekend: dom.includeWeekend.checked,
     note: normalizeParagraph(dom.planNote.value, 220),
   };
 }
@@ -163,19 +272,24 @@ function collectMealFromForm(currentMeal = null) {
 function render() {
   renderHero();
   renderStats();
+  renderBoardHeading();
   renderBoard();
+  renderSharedNotice();
 }
 
 function renderHero() {
-  dom.weekRange.textContent = formatWeekRange(state.plan.weekOf);
+  dom.weekRange.textContent = formatWeekRange(state.plan);
   dom.heroPlanName.textContent = `${state.plan.title} · ${formatHouseholdSize(state.plan.householdSize)}`;
   dom.planFocusDisplay.textContent =
     state.plan.note || "Add a week focus so the planner stays practical.";
 }
 
 function renderStats() {
-  const totalMeals = state.meals.length;
-  const daysCovered = new Set(state.meals.map((meal) => meal.day)).size;
+  const activeDayKeys = new Set(getPlanDays().map((day) => day.key));
+  const totalMeals = state.meals.filter((meal) => activeDayKeys.has(meal.day)).length;
+  const daysCovered = new Set(
+    state.meals.filter((meal) => activeDayKeys.has(meal.day)).map((meal) => meal.day),
+  ).size;
   const totalLinks = state.meals.reduce((sum, meal) => sum + meal.videoLinks.length, 0);
 
   const prepValues = state.meals
@@ -186,18 +300,32 @@ function renderStats() {
     : null;
 
   dom.statMeals.textContent = String(totalMeals);
-  dom.statDays.textContent = `${daysCovered} / 5`;
+  dom.statDays.textContent = `${daysCovered} / ${getPlanDays().length}`;
   dom.statLinks.textContent = String(totalLinks);
   dom.statPrep.textContent = averagePrep === null ? "-" : `${averagePrep} min`;
+}
+
+function renderBoardHeading() {
+  if (state.plan.includeWeekend) {
+    dom.boardTitle.textContent = "Full Week Layout";
+    dom.boardCopy.textContent =
+      "Saturday and Sunday are enabled, so the board covers the whole week from Monday through Sunday.";
+    return;
+  }
+
+  dom.boardTitle.textContent = "Weekday Layout";
+  dom.boardCopy.textContent =
+    "Saturday and Sunday stay optional, so the planner can stay weekday-first when you want it to.";
 }
 
 function renderBoard() {
   dom.weekdayBoard.innerHTML = "";
 
+  const activeDays = getPlanDays();
   const daysToRender =
     state.filters.day === "all"
-      ? WEEKDAYS
-      : WEEKDAYS.filter((day) => day.key === state.filters.day);
+      ? activeDays
+      : activeDays.filter((day) => day.key === state.filters.day);
 
   daysToRender.forEach((day) => {
     const fragment = dom.dayColumnTemplate.content.cloneNode(true);
@@ -208,7 +336,7 @@ function renderBoard() {
     const mealsEl = fragment.querySelector(".day-meals");
     const emptyEl = fragment.querySelector(".day-empty");
 
-    const date = addDays(parseDateInput(state.plan.weekOf), weekdayOrder.get(day.key));
+    const date = addDays(parseDateInput(state.plan.weekOf), day.offset);
     const allMeals = sortMeals(state.meals.filter((meal) => meal.day === day.key));
     const visibleMeals = getVisibleMeals(allMeals);
 
@@ -220,7 +348,9 @@ function renderBoard() {
       mealsEl.appendChild(renderMealCard(meal));
     });
 
-    const hasFilters = Boolean(state.filters.query || state.filters.day !== "all" || state.filters.links !== "all");
+    const hasFilters = Boolean(
+      state.filters.query || state.filters.day !== "all" || state.filters.links !== "all",
+    );
     const showEmpty = visibleMeals.length === 0;
 
     emptyEl.textContent = showEmpty
@@ -326,6 +456,7 @@ function startEditingMeal(mealId) {
   dom.submitMeal.textContent = "Save Changes";
   dom.cancelEdit.classList.remove("hidden");
   dom.editingMealId.value = meal.id;
+  syncSelectableDays(meal.day);
   dom.mealDay.value = meal.day;
   dom.mealType.value = meal.mealType;
   dom.mealTitle.value = meal.title;
@@ -388,9 +519,52 @@ function clearWeek() {
 
   saveState();
   syncPlanForm();
+  syncSelectableDays();
   syncFilterControls();
   resetMealForm();
   render();
+  setShareFeedback("Week cleared.", "muted");
+}
+
+function importSharedPayload(payload) {
+  state.plan = sanitizePlan(payload.plan);
+  state.meals = sanitizeMeals(payload.meals);
+  state.filters = getDefaultFilters();
+
+  saveState();
+  dismissSharedNotice({ clearHash: true, skipRender: true });
+  syncPlanForm();
+  syncSelectableDays();
+  syncFilterControls();
+  resetMealForm();
+  render();
+  setShareFeedback("Shared week imported.", "ok");
+}
+
+function dismissSharedNotice(options = {}) {
+  pendingSharedPayload = null;
+
+  if (options.clearHash) {
+    clearShareHash();
+  }
+
+  if (!options.skipRender) {
+    renderSharedNotice();
+  }
+}
+
+function renderSharedNotice() {
+  const hasPayload = Boolean(pendingSharedPayload);
+  dom.sharedBanner.classList.toggle("hidden", !hasPayload);
+
+  if (!hasPayload) {
+    dom.sharedBannerText.textContent = "";
+    return;
+  }
+
+  const sharedMeals = Array.isArray(pendingSharedPayload.meals) ? pendingSharedPayload.meals : [];
+  const sharedDays = new Set(sharedMeals.map((meal) => meal.day)).size;
+  dom.sharedBannerText.textContent = `${pendingSharedPayload.plan.title} is ready to import with ${sharedMeals.length} meals across ${sharedDays} day${sharedDays === 1 ? "" : "s"}.`;
 }
 
 function resetMealForm(options = {}) {
@@ -405,7 +579,9 @@ function resetMealForm(options = {}) {
   dom.mealNotes.value = "";
   dom.mealLinks.value = "";
 
-  if (!options.preserveDay || !WEEKDAYS.some((day) => day.key === dom.mealDay.value)) {
+  syncSelectableDays();
+
+  if (!options.preserveDay || !getPlanDays().some((day) => day.key === dom.mealDay.value)) {
     dom.mealDay.value = getDefaultMealDay();
   }
 }
@@ -414,13 +590,55 @@ function syncPlanForm() {
   dom.planTitle.value = state.plan.title;
   dom.weekOf.value = state.plan.weekOf;
   dom.householdSize.value = String(state.plan.householdSize);
+  dom.includeWeekend.checked = state.plan.includeWeekend;
   dom.planNote.value = state.plan.note;
+}
+
+function syncSelectableDays(preferredMealDay = dom.mealDay.value) {
+  const activeDays = getPlanDays();
+
+  populateDaySelect(dom.mealDay, activeDays, preferredMealDay || getDefaultMealDay());
+
+  state.filters.day = normalizeFilterDay(state.filters.day, activeDays);
+  populateFilterDaySelect(dom.filterDay, activeDays, state.filters.day);
 }
 
 function syncFilterControls() {
   dom.searchQuery.value = state.filters.query;
-  dom.filterDay.value = state.filters.day;
   dom.filterLinks.value = state.filters.links;
+  populateFilterDaySelect(dom.filterDay, getPlanDays(), state.filters.day);
+}
+
+function populateDaySelect(selectElement, days, selectedValue) {
+  selectElement.innerHTML = "";
+
+  days.forEach((day) => {
+    const option = document.createElement("option");
+    option.value = day.key;
+    option.textContent = day.label;
+    selectElement.appendChild(option);
+  });
+
+  const fallback = days[0]?.key || "monday";
+  selectElement.value = days.some((day) => day.key === selectedValue) ? selectedValue : fallback;
+}
+
+function populateFilterDaySelect(selectElement, days, selectedValue) {
+  selectElement.innerHTML = "";
+
+  const allOption = document.createElement("option");
+  allOption.value = "all";
+  allOption.textContent = "All visible days";
+  selectElement.appendChild(allOption);
+
+  days.forEach((day) => {
+    const option = document.createElement("option");
+    option.value = day.key;
+    option.textContent = day.label;
+    selectElement.appendChild(option);
+  });
+
+  selectElement.value = selectedValue === "all" ? "all" : normalizeFilterDay(selectedValue, days);
 }
 
 function getVisibleMeals(meals) {
@@ -460,7 +678,7 @@ function getVisibleMeals(meals) {
 
 function sortMeals(meals) {
   return [...meals].sort((left, right) => {
-    const dayDelta = weekdayOrder.get(left.day) - weekdayOrder.get(right.day);
+    const dayDelta = dayOrder.get(left.day) - dayOrder.get(right.day);
     if (dayDelta !== 0) {
       return dayDelta;
     }
@@ -470,7 +688,9 @@ function sortMeals(meals) {
       return mealDelta;
     }
 
-    const prepDelta = (left.prepMinutes ?? Number.POSITIVE_INFINITY) - (right.prepMinutes ?? Number.POSITIVE_INFINITY);
+    const prepDelta =
+      (left.prepMinutes ?? Number.POSITIVE_INFINITY) -
+      (right.prepMinutes ?? Number.POSITIVE_INFINITY);
     if (prepDelta !== 0) {
       return prepDelta;
     }
@@ -493,10 +713,12 @@ function loadState() {
     }
 
     const parsed = JSON.parse(raw);
+    const plan = sanitizePlan(parsed?.plan);
+
     return {
-      plan: sanitizePlan(parsed?.plan),
+      plan,
       meals: sanitizeMeals(parsed?.meals),
-      filters: sanitizeFilters(parsed?.filters),
+      filters: sanitizeFilters(parsed?.filters, plan),
     };
   } catch {
     return fallback;
@@ -512,6 +734,7 @@ function sanitizePlan(plan) {
     title: normalizeTitle(plan?.title, "Weekday Flow"),
     weekOf: normalizeWeekOf(plan?.weekOf || getMondayInput()),
     householdSize: normalizeHouseholdSize(plan?.householdSize),
+    includeWeekend: plan?.includeWeekend === true,
     note: normalizeParagraph(plan?.note, 220),
   };
 }
@@ -548,10 +771,10 @@ function sanitizeMeals(meals) {
   }, []);
 }
 
-function sanitizeFilters(filters) {
+function sanitizeFilters(filters, plan = state?.plan || getDefaultPlan()) {
   return {
     query: normalizeText(filters?.query),
-    day: normalizeFilterDay(filters?.day),
+    day: normalizeFilterDay(filters?.day, getPlanDays(plan)),
     links: normalizeLinkFilter(filters?.links),
   };
 }
@@ -561,6 +784,7 @@ function getDefaultPlan() {
     title: "Weekday Flow",
     weekOf: getMondayInput(),
     householdSize: 4,
+    includeWeekend: false,
     note: "",
   };
 }
@@ -573,16 +797,28 @@ function getDefaultFilters() {
   };
 }
 
+function getPlanDays(plan = state.plan) {
+  return plan.includeWeekend ? ALL_DAYS : CORE_DAYS;
+}
+
+function isWeekendDay(dayKey) {
+  return WEEKEND_DAYS.some((day) => day.key === dayKey);
+}
+
 function normalizeWeekday(value) {
-  return WEEKDAYS.some((day) => day.key === value) ? value : "monday";
+  return ALL_DAYS.some((day) => day.key === value) ? value : "monday";
 }
 
 function normalizeMealType(value) {
   return MEAL_TYPES.some((type) => type.key === value) ? value : "dinner";
 }
 
-function normalizeFilterDay(value) {
-  return value === "all" || WEEKDAYS.some((day) => day.key === value) ? value : "all";
+function normalizeFilterDay(value, days = getPlanDays()) {
+  if (value === "all") {
+    return "all";
+  }
+
+  return days.some((day) => day.key === value) ? value : "all";
 }
 
 function normalizeLinkFilter(value) {
@@ -798,9 +1034,108 @@ function cleanVideoId(value) {
   return trimmed ? trimmed : null;
 }
 
-function formatWeekRange(weekOf) {
-  const start = parseDateInput(weekOf);
-  const end = addDays(start, 4);
+function buildShareUrl() {
+  const payload = {
+    version: 1,
+    plan: sanitizePlan(state.plan),
+    meals: sortMeals(sanitizeMeals(state.meals)),
+  };
+  const encoded = encodeSharePayload(payload);
+  const url = new URL(window.location.href);
+  url.hash = `share=${encoded}`;
+
+  return url.toString().length > 6000 ? null : url.toString();
+}
+
+function encodeSharePayload(payload) {
+  const json = JSON.stringify(payload);
+  const bytes = new TextEncoder().encode(json);
+  let binary = "";
+
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function readSharedPayloadFromLocation() {
+  return decodeSharedInput(window.location.href);
+}
+
+function decodeSharedInput(input) {
+  if (typeof input !== "string") {
+    return null;
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith(SHARE_HASH_PREFIX)) {
+    return decodeShareToken(trimmed.slice(SHARE_HASH_PREFIX.length));
+  }
+
+  try {
+    const url = new URL(trimmed);
+    if (url.hash.startsWith(SHARE_HASH_PREFIX)) {
+      return decodeShareToken(url.hash.slice(SHARE_HASH_PREFIX.length));
+    }
+  } catch {}
+
+  return decodeShareToken(trimmed);
+}
+
+function decodeShareToken(token) {
+  if (typeof token !== "string" || !token.trim()) {
+    return null;
+  }
+
+  try {
+    const normalized = token.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
+    const parsed = JSON.parse(json);
+
+    return {
+      plan: sanitizePlan(parsed?.plan),
+      meals: sanitizeMeals(parsed?.meals),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearShareHash() {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  window.history.replaceState({}, "", url.toString());
+}
+
+async function copyText(value) {
+  if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+    return false;
+  }
+
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function setShareFeedback(message, tone = "muted") {
+  dom.shareFeedback.textContent = message;
+  dom.shareFeedback.className = `helper-line ${tone}`;
+}
+
+function formatWeekRange(plan) {
+  const start = parseDateInput(plan.weekOf);
+  const end = addDays(start, plan.includeWeekend ? 6 : 4);
 
   const startText = new Intl.DateTimeFormat(undefined, {
     month: "short",
@@ -811,7 +1146,7 @@ function formatWeekRange(weekOf) {
     day: "numeric",
   }).format(end);
 
-  return `${startText} - ${endText}`;
+  return `${startText} - ${endText} · ${plan.includeWeekend ? "Full week" : "Weekdays"}`;
 }
 
 function formatColumnDate(date) {
@@ -890,12 +1225,21 @@ function toDateInput(date) {
 }
 
 function getDefaultMealDay() {
-  const weekday = new Date().getDay();
-  if (weekday >= 1 && weekday <= 5) {
-    return WEEKDAYS[weekday - 1].key;
+  const today = new Date().getDay();
+  const activeDays = getPlanDays();
+
+  if (today >= 1 && today <= 6) {
+    const todayKey = ALL_DAYS[today - 1]?.key;
+    if (activeDays.some((day) => day.key === todayKey)) {
+      return todayKey;
+    }
   }
 
-  return "monday";
+  if (today === 0 && activeDays.some((day) => day.key === "sunday")) {
+    return "sunday";
+  }
+
+  return activeDays[0]?.key || "monday";
 }
 
 function newId() {
@@ -913,7 +1257,7 @@ function registerServiceWorker() {
 
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=20250321-1", { updateViaCache: "none" })
+      .register("./service-worker.js?v=20260320-2", { updateViaCache: "none" })
       .catch(() => {});
   });
 }
