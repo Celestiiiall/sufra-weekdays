@@ -1294,7 +1294,7 @@ function registerServiceWorker() {
 
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=20260320-3", { updateViaCache: "none" })
+      .register("./service-worker.js?v=20260320-4", { updateViaCache: "none" })
       .catch(() => {});
   });
 }

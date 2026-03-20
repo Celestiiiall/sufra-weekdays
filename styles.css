@@ -22,6 +22,8 @@
   --hero-summary-bottom: rgba(57, 44, 31, 0.86);
   --hero-summary-ink: #fdf7f0;
   --hero-summary-soft: rgba(253, 247, 240, 0.82);
+  --stat-card-top: rgba(255, 251, 245, 0.94);
+  --stat-card-bottom: rgba(251, 242, 229, 0.9);
   --field-bg: rgba(255, 252, 248, 0.88);
   --toggle-track: rgba(91, 79, 66, 0.16);
   --toggle-thumb: #fffaf2;
@@ -60,10 +62,12 @@
   --sage: #9ec38f;
   --sage-soft: rgba(158, 195, 143, 0.14);
   --berry: #f0b0b0;
-  --hero-summary-top: rgba(245, 237, 225, 0.92);
-  --hero-summary-bottom: rgba(226, 213, 194, 0.86);
-  --hero-summary-ink: #1e1a17;
-  --hero-summary-soft: rgba(30, 26, 23, 0.7);
+  --hero-summary-top: rgba(28, 39, 58, 0.96);
+  --hero-summary-bottom: rgba(17, 24, 39, 0.92);
+  --hero-summary-ink: #f5efe3;
+  --hero-summary-soft: rgba(245, 239, 227, 0.72);
+  --stat-card-top: rgba(27, 38, 57, 0.96);
+  --stat-card-bottom: rgba(16, 23, 36, 0.92);
   --field-bg: rgba(16, 24, 37, 0.9);
   --toggle-track: rgba(214, 197, 173, 0.18);
   --toggle-thumb: #f8f1e4;
@@ -263,6 +267,10 @@ h4 {
   align-self: stretch;
   display: grid;
   gap: 10px;
+  border: 1px solid var(--line-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 34px rgba(0, 0, 0, 0.16);
 }
 
 .hero-summary .summary-label,
@@ -528,7 +536,7 @@ button:active {
 .stat-card {
   padding: 18px;
   background:
-    linear-gradient(180deg, rgba(255, 251, 245, 0.94), rgba(251, 242, 229, 0.9)),
+    linear-gradient(180deg, var(--stat-card-top), var(--stat-card-bottom)),
     var(--panel);
 }
 
