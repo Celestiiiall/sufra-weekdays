@@ -478,15 +478,16 @@ button:active {
   transform: translateY(0);
 }
 
-#save-plan,
-#submit-meal,
+#save-collection,
+#submit-recipe,
+#pick-recipes,
 #import-shared-link {
   background: linear-gradient(135deg, var(--accent), var(--accent-deep));
   color: #fff7ef;
   box-shadow: 0 14px 28px rgba(182, 82, 22, 0.24);
 }
 
-#share-plan {
+#share-pool {
   background: linear-gradient(135deg, var(--sage), #47613d);
   color: #f4fbf2;
   box-shadow: 0 14px 28px rgba(71, 97, 61, 0.24);
@@ -637,6 +638,33 @@ button:active {
   gap: 12px;
 }
 
+.current-picks {
+  display: grid;
+  gap: 12px;
+}
+
+.current-pick-card {
+  background: linear-gradient(180deg, var(--card-bg), rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.current-pick-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.empty-copy {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
 .meal-topline,
 .meal-actions,
 .video-link-row {
@@ -648,6 +676,7 @@ button:active {
 
 .meal-type-pill,
 .meal-prep,
+.recipe-status-pill,
 .video-link {
   display: inline-flex;
   align-items: center;
@@ -676,6 +705,61 @@ button:active {
   line-height: 1.55;
   font-size: 0.92rem;
 }
+
+.recipe-status-pill {
+  background: rgba(29, 26, 23, 0.08);
+  color: var(--ink-soft);
+}
+
+.recipe-status-pill.status-available {
+  background: rgba(96, 122, 85, 0.14);
+  color: var(--sage);
+}
+
+.recipe-status-pill.status-used {
+  background: rgba(122, 63, 67, 0.12);
+  color: var(--berry);
+}
+
+.recipe-status-pill.status-current {
+  background: rgba(219, 111, 46, 0.16);
+  color: var(--accent-deep);
+}
+
+.recipe-card.is-available {
+  border-color: rgba(96, 122, 85, 0.18);
+}
+
+.recipe-card.is-used {
+  border-color: rgba(122, 63, 67, 0.18);
+}
+
+.recipe-card.is-current {
+  border-color: rgba(219, 111, 46, 0.32);
+  box-shadow: 0 16px 32px rgba(182, 82, 22, 0.18);
+}
+
+.recipe-card-title,
+.current-pick-title {
+  line-height: 1.12;
+}
+
+.video-link-row:empty,
+.embed-stack:empty,
+.ingredient-chips:empty {
+  display: none;
+}
+
+.current-pick-card .meal-actions {
+  justify-content: flex-start;
+}
+
+.current-pick-card .meal-actions .action-button.return,
+.action-button.toggle.is-return {
+  background: rgba(96, 122, 85, 0.12);
+  color: var(--sage);
+}
+
 
 .ingredient-chips {
   list-style: none;

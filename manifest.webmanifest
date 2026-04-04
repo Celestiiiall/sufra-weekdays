@@ -1,7 +1,7 @@
 {
-  "name": "Sufra Weekdays",
-  "short_name": "Sufra",
-  "description": "A weekly meal planner with optional weekend days, shareable plans, recipe video links, and inline previews for supported sources.",
+  "name": "Sufra Pool",
+  "short_name": "Sufra Pool",
+  "description": "A static recipe-pool randomizer that saves recipes with links, picks without repeats, and shares full pools by link or JSON.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

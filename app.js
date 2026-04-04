@@ -1,26 +1,13 @@
-const STORAGE_KEY = "sufra-weekdays-v1";
+const STORAGE_KEY = "sufra-recipe-picker-v1";
+const LEGACY_STORAGE_KEY = "sufra-weekdays-v1";
 const THEME_STORAGE_KEY = "sufra-weekdays-theme";
-const SHARE_HASH_PREFIX = "#share=";
+const SHARE_HASH_PREFIX = "#pool=";
+const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-6";
 const THEME_COLORS = {
   light: "#efe3ce",
   dark: "#111827",
 };
 
-const CORE_DAYS = [
-  { key: "monday", label: "Monday" },
-  { key: "tuesday", label: "Tuesday" },
-  { key: "wednesday", label: "Wednesday" },
-  { key: "thursday", label: "Thursday" },
-  { key: "friday", label: "Friday" },
-];
-const WEEKEND_DAYS = [
-  { key: "saturday", label: "Saturday" },
-  { key: "sunday", label: "Sunday" },
-];
-const ALL_DAYS = [...CORE_DAYS, ...WEEKEND_DAYS].map((day, index) => ({
-  ...day,
-  offset: index,
-}));
 const MEAL_TYPES = [
   { key: "breakfast", label: "Breakfast" },
   { key: "lunch", label: "Lunch" },
@@ -28,76 +15,83 @@ const MEAL_TYPES = [
   { key: "snack", label: "Snack" },
 ];
 
-const dayOrder = new Map(ALL_DAYS.map((day, index) => [day.key, index]));
 const mealTypeOrder = new Map(MEAL_TYPES.map((type, index) => [type.key, index]));
+const statusOrder = new Map([
+  ["current", 0],
+  ["available", 1],
+  ["used", 2],
+]);
 
 const dom = {
-  planForm: document.getElementById("plan-form"),
   themeToggle: document.getElementById("theme-toggle"),
-  planTitle: document.getElementById("plan-title"),
-  weekOf: document.getElementById("week-of"),
-  householdSize: document.getElementById("household-size"),
-  includeWeekend: document.getElementById("include-weekend"),
-  planNote: document.getElementById("plan-note"),
-  weekRange: document.getElementById("week-range"),
-  heroPlanName: document.getElementById("hero-plan-name"),
-  planFocusDisplay: document.getElementById("plan-focus-display"),
-  sharePlan: document.getElementById("share-plan"),
+  collectionForm: document.getElementById("collection-form"),
+  collectionTitle: document.getElementById("collection-title"),
+  collectionNote: document.getElementById("collection-note"),
+  sharePool: document.getElementById("share-pool"),
   importShared: document.getElementById("import-shared"),
-  exportPlan: document.getElementById("export-plan"),
-  clearPlan: document.getElementById("clear-plan"),
+  exportPool: document.getElementById("export-pool"),
+  clearPool: document.getElementById("clear-pool"),
   shareFeedback: document.getElementById("share-feedback"),
   sharedBanner: document.getElementById("shared-banner"),
   sharedBannerText: document.getElementById("shared-banner-text"),
   importSharedLink: document.getElementById("import-shared-link"),
   dismissSharedLink: document.getElementById("dismiss-shared-link"),
-  mealForm: document.getElementById("meal-form"),
+  poolSummary: document.getElementById("pool-summary"),
+  heroCollectionName: document.getElementById("hero-collection-name"),
+  poolStatusDisplay: document.getElementById("pool-status-display"),
+  recipeForm: document.getElementById("recipe-form"),
   composerHeading: document.getElementById("composer-heading"),
-  mealDay: document.getElementById("meal-day"),
-  mealType: document.getElementById("meal-type"),
-  mealTitle: document.getElementById("meal-title"),
-  mealPrep: document.getElementById("meal-prep"),
-  mealIngredients: document.getElementById("meal-ingredients"),
-  mealNotes: document.getElementById("meal-notes"),
-  mealLinks: document.getElementById("meal-links"),
-  editingMealId: document.getElementById("editing-meal-id"),
-  submitMeal: document.getElementById("submit-meal"),
+  recipeType: document.getElementById("recipe-type"),
+  recipeTitle: document.getElementById("recipe-title"),
+  recipePrep: document.getElementById("recipe-prep"),
+  recipeIngredients: document.getElementById("recipe-ingredients"),
+  recipeNotes: document.getElementById("recipe-notes"),
+  recipeLinks: document.getElementById("recipe-links"),
+  editingRecipeId: document.getElementById("editing-recipe-id"),
+  submitRecipe: document.getElementById("submit-recipe"),
   cancelEdit: document.getElementById("cancel-edit"),
+  pickerTypeFilter: document.getElementById("picker-type-filter"),
+  pickerCount: document.getElementById("picker-count"),
+  pickRecipes: document.getElementById("pick-recipes"),
+  resetCycle: document.getElementById("reset-cycle"),
+  pickerFeedback: document.getElementById("picker-feedback"),
+  currentPicks: document.getElementById("current-picks"),
   searchQuery: document.getElementById("search-query"),
-  filterDay: document.getElementById("filter-day"),
-  filterLinks: document.getElementById("filter-links"),
-  statMeals: document.getElementById("stat-meals"),
-  statDays: document.getElementById("stat-days"),
+  filterType: document.getElementById("filter-type"),
+  filterAvailability: document.getElementById("filter-availability"),
+  statRecipes: document.getElementById("stat-recipes"),
+  statAvailable: document.getElementById("stat-available"),
+  statUsed: document.getElementById("stat-used"),
   statLinks: document.getElementById("stat-links"),
-  statPrep: document.getElementById("stat-prep"),
   boardTitle: document.getElementById("board-title"),
   boardCopy: document.getElementById("board-copy"),
-  weekdayBoard: document.getElementById("weekday-board"),
-  dayColumnTemplate: document.getElementById("day-column-template"),
-  mealCardTemplate: document.getElementById("meal-card-template"),
+  recipeBoard: document.getElementById("recipe-board"),
+  recipeColumnTemplate: document.getElementById("recipe-column-template"),
+  recipeCardTemplate: document.getElementById("recipe-card-template"),
+  currentPickTemplate: document.getElementById("current-pick-template"),
 };
 
-const state = loadState();
+let state = loadState();
 let pendingSharedPayload = readSharedPayloadFromLocation();
 
 init();
 
 function init() {
   applyTheme(loadThemePreference());
-  syncPlanForm();
-  syncSelectableDays();
+  syncCollectionForm();
   syncFilterControls();
-  resetMealForm();
+  syncPickerControls();
+  resetRecipeForm();
   renderSharedNotice();
 
   dom.themeToggle.addEventListener("click", toggleTheme);
-  dom.planForm.addEventListener("submit", handleSavePlan);
-  dom.mealForm.addEventListener("submit", handleSubmitMeal);
-  dom.cancelEdit.addEventListener("click", () => resetMealForm({ preserveDay: true }));
-  dom.sharePlan.addEventListener("click", handleSharePlan);
+  dom.collectionForm.addEventListener("submit", handleSaveCollection);
+  dom.recipeForm.addEventListener("submit", handleSubmitRecipe);
+  dom.cancelEdit.addEventListener("click", () => resetRecipeForm({ preserveType: true }));
+  dom.sharePool.addEventListener("click", handleSharePool);
   dom.importShared.addEventListener("click", handleImportPrompt);
-  dom.exportPlan.addEventListener("click", exportPlanAsJson);
-  dom.clearPlan.addEventListener("click", clearWeek);
+  dom.exportPool.addEventListener("click", exportPoolAsJson);
+  dom.clearPool.addEventListener("click", clearPool);
   dom.importSharedLink.addEventListener("click", () => {
     if (pendingSharedPayload) {
       importSharedPayload(pendingSharedPayload);
@@ -106,25 +100,230 @@ function init() {
   dom.dismissSharedLink.addEventListener("click", () => dismissSharedNotice({ clearHash: true }));
 
   dom.searchQuery.addEventListener("input", (event) => {
-    state.filters.query = normalizeText(event.target.value);
+    state.filters.query = String(event.target.value || "").slice(0, 120);
     saveState();
     render();
   });
 
-  dom.filterDay.addEventListener("change", (event) => {
-    state.filters.day = normalizeFilterDay(event.target.value, getPlanDays());
+  dom.filterType.addEventListener("change", (event) => {
+    state.filters.type = normalizeMealTypeFilter(event.target.value);
     saveState();
     render();
   });
 
-  dom.filterLinks.addEventListener("change", (event) => {
-    state.filters.links = normalizeLinkFilter(event.target.value);
+  dom.filterAvailability.addEventListener("change", (event) => {
+    state.filters.availability = normalizeAvailability(event.target.value);
     saveState();
     render();
   });
+
+  dom.pickerTypeFilter.addEventListener("change", (event) => {
+    state.picker.typeFilter = normalizeMealTypeFilter(event.target.value);
+    saveState();
+    render();
+  });
+
+  dom.pickerCount.addEventListener("change", (event) => {
+    state.picker.pickCount = normalizePickCount(event.target.value);
+    saveState();
+  });
+
+  dom.pickRecipes.addEventListener("click", pickRecipesWithoutRepeats);
+  dom.resetCycle.addEventListener("click", resetCycle);
+  window.addEventListener("hashchange", handleHashChange);
 
   render();
   registerServiceWorker();
+}
+
+function createDefaultState() {
+  return {
+    collection: {
+      title: "Sufra Pool",
+      note: "",
+    },
+    recipes: [],
+    cycle: {
+      usedRecipeIds: [],
+      currentPickIds: [],
+    },
+    picker: {
+      typeFilter: "all",
+      pickCount: 1,
+    },
+    filters: {
+      query: "",
+      type: "all",
+      availability: "all",
+    },
+  };
+}
+
+function loadState() {
+  const stored = readJsonFromStorage(STORAGE_KEY);
+  if (stored) {
+    return normalizeState(stored);
+  }
+
+  const legacy = readJsonFromStorage(LEGACY_STORAGE_KEY);
+  if (legacy) {
+    const migrated = normalizeState(legacy);
+    writeJsonToStorage(STORAGE_KEY, migrated);
+    return migrated;
+  }
+
+  return createDefaultState();
+}
+
+function readJsonFromStorage(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function writeJsonToStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    return false;
+  }
+
+  return true;
+}
+
+function saveState() {
+  writeJsonToStorage(STORAGE_KEY, state);
+}
+
+function normalizeState(raw) {
+  const baseState = isLegacyPlannerState(raw) ? migrateLegacyPlannerState(raw) : raw;
+  const defaults = createDefaultState();
+  const recipes = Array.isArray(baseState?.recipes)
+    ? baseState.recipes.map(normalizeRecipe).filter(Boolean)
+    : [];
+  const recipeIdSet = new Set(recipes.map((recipe) => recipe.id));
+  const currentPickIds = uniqueIds(baseState?.cycle?.currentPickIds).filter((id) => recipeIdSet.has(id));
+  const usedRecipeIds = uniqueIds([
+    ...(Array.isArray(baseState?.cycle?.usedRecipeIds) ? baseState.cycle.usedRecipeIds : []),
+    ...currentPickIds,
+  ]).filter((id) => recipeIdSet.has(id));
+
+  return {
+    collection: {
+      title: normalizeTitle(baseState?.collection?.title, defaults.collection.title),
+      note: normalizeParagraph(baseState?.collection?.note, 220),
+    },
+    recipes,
+    cycle: {
+      usedRecipeIds,
+      currentPickIds,
+    },
+    picker: {
+      typeFilter: normalizeMealTypeFilter(baseState?.picker?.typeFilter),
+      pickCount: normalizePickCount(baseState?.picker?.pickCount),
+    },
+    filters: {
+      query: String(baseState?.filters?.query || "").slice(0, 120),
+      type: normalizeMealTypeFilter(baseState?.filters?.type),
+      availability: normalizeAvailability(baseState?.filters?.availability),
+    },
+  };
+}
+
+function isLegacyPlannerState(raw) {
+  return Boolean(raw && typeof raw === "object" && Array.isArray(raw.meals));
+}
+
+function migrateLegacyPlannerState(raw) {
+  const nowIso = new Date().toISOString();
+
+  return {
+    collection: {
+      title: normalizeTitle(raw?.plan?.title, "Sufra Pool"),
+      note: normalizeParagraph(raw?.plan?.note, 220),
+    },
+    recipes: (Array.isArray(raw?.meals) ? raw.meals : []).map((meal) => ({
+      id: typeof meal?.id === "string" && meal.id ? meal.id : newId(),
+      mealType: normalizeMealType(meal?.mealType),
+      title: normalizeTitle(meal?.title, ""),
+      prepMinutes: normalizePrepMinutes(meal?.prepMinutes),
+      ingredients: normalizeIngredients(meal?.ingredients),
+      notes: normalizeParagraph(meal?.notes, 320),
+      links: normalizeImportedLinks(meal?.videoLinks),
+      createdAt: normalizeIsoDate(meal?.createdAt) || nowIso,
+      updatedAt: normalizeIsoDate(meal?.updatedAt) || nowIso,
+    })),
+    cycle: {
+      usedRecipeIds: [],
+      currentPickIds: [],
+    },
+    picker: {
+      typeFilter: "all",
+      pickCount: 1,
+    },
+    filters: {
+      query: "",
+      type: "all",
+      availability: "all",
+    },
+  };
+}
+
+function normalizeRecipe(raw) {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const title = normalizeTitle(raw.title, "");
+  if (!title) {
+    return null;
+  }
+
+  const nowIso = new Date().toISOString();
+
+  return {
+    id: typeof raw.id === "string" && raw.id ? raw.id : newId(),
+    mealType: normalizeMealType(raw.mealType || raw.type),
+    title,
+    prepMinutes: normalizePrepMinutes(raw.prepMinutes),
+    ingredients: normalizeIngredients(raw.ingredients),
+    notes: normalizeParagraph(raw.notes, 320),
+    links: normalizeImportedLinks(raw.links || raw.videoLinks),
+    createdAt: normalizeIsoDate(raw.createdAt) || nowIso,
+    updatedAt: normalizeIsoDate(raw.updatedAt) || nowIso,
+  };
+}
+
+function normalizeImportedLinks(input) {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const links = [];
+
+  for (const item of input) {
+    if (typeof item === "string") {
+      const parsed = parseLinkInput(item);
+      if (parsed) {
+        links.push(parsed);
+      }
+      continue;
+    }
+
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+
+    const parsed = buildLinkRecord(item.url, item.label || item.title || item.host, item.id);
+    if (parsed) {
+      links.push(parsed);
+    }
+  }
+
+  return dedupeLinks(links);
 }
 
 function loadThemePreference() {
@@ -156,84 +355,93 @@ function applyTheme(theme) {
   }
 }
 
-function handleSavePlan(event) {
+function handleSaveCollection(event) {
   event.preventDefault();
-
-  const nextPlan = collectPlanFromForm();
-
-  if (!nextPlan.includeWeekend && state.plan.includeWeekend) {
-    const weekendMeals = state.meals.filter((meal) => isWeekendDay(meal.day));
-    if (weekendMeals.length) {
-      const shouldRemoveWeekendMeals = window.confirm(
-        "Turning weekend off will remove Saturday and Sunday meals from this plan. Press OK to remove them or Cancel to keep weekend enabled.",
-      );
-
-      if (!shouldRemoveWeekendMeals) {
-        nextPlan.includeWeekend = true;
-      } else {
-        state.meals = state.meals.filter((meal) => !isWeekendDay(meal.day));
-      }
-    }
-  }
-
-  state.plan = nextPlan;
-  state.filters.day = normalizeFilterDay(state.filters.day, getPlanDays(nextPlan));
-
+  state.collection.title = normalizeTitle(dom.collectionTitle.value, "Sufra Pool");
+  state.collection.note = normalizeParagraph(dom.collectionNote.value, 220);
   saveState();
-  syncPlanForm();
-  syncSelectableDays();
-  syncFilterControls();
   render();
+  setShareFeedback("Recipe pool saved locally.", "muted");
 }
 
-function handleSubmitMeal(event) {
+function handleSubmitRecipe(event) {
   event.preventDefault();
 
-  const editingId = dom.editingMealId.value || null;
-  const currentMeal = editingId ? state.meals.find((meal) => meal.id === editingId) : null;
-  const nextMeal = collectMealFromForm(currentMeal);
+  const editingId = dom.editingRecipeId.value || null;
+  const currentRecipe = editingId ? state.recipes.find((recipe) => recipe.id === editingId) : null;
+  const nextRecipe = collectRecipeFromForm(currentRecipe);
 
-  if (!nextMeal) {
+  if (!nextRecipe) {
     return;
   }
 
-  if (editingId && currentMeal) {
-    const index = state.meals.findIndex((meal) => meal.id === editingId);
+  if (editingId && currentRecipe) {
+    const index = state.recipes.findIndex((recipe) => recipe.id === editingId);
     if (index !== -1) {
-      state.meals[index] = nextMeal;
+      state.recipes[index] = nextRecipe;
     }
+    setShareFeedback("Recipe updated.", "ok");
   } else {
-    state.meals.push(nextMeal);
+    state.recipes.push(nextRecipe);
+    setShareFeedback("Recipe added to the pool.", "ok");
   }
 
+  sanitizeCycle();
   saveState();
   render();
-  resetMealForm({ preserveDay: true });
-  setShareFeedback("Week saved locally. Share it when you are ready.", "muted");
+  resetRecipeForm({ preserveType: true });
 }
 
-async function handleSharePlan() {
-  if (!state.meals.length) {
-    setShareFeedback("Add at least one meal before sharing the week.", "warn");
+function collectRecipeFromForm(currentRecipe = null) {
+  const title = normalizeTitle(dom.recipeTitle.value, "");
+  if (!title) {
+    dom.recipeTitle.focus();
+    return null;
+  }
+
+  const { links, invalid } = parseRecipeLinks(dom.recipeLinks.value);
+  if (invalid.length) {
+    window.alert(`These links could not be saved:\n${invalid.join("\n")}`);
+    return null;
+  }
+
+  const nowIso = new Date().toISOString();
+
+  return {
+    id: currentRecipe?.id || newId(),
+    mealType: normalizeMealType(dom.recipeType.value),
+    title,
+    prepMinutes: normalizePrepMinutes(dom.recipePrep.value),
+    ingredients: parseIngredients(dom.recipeIngredients.value),
+    notes: normalizeParagraph(dom.recipeNotes.value, 320),
+    links,
+    createdAt: currentRecipe?.createdAt || nowIso,
+    updatedAt: nowIso,
+  };
+}
+
+async function handleSharePool() {
+  if (!state.recipes.length) {
+    setShareFeedback("Add at least one recipe before sharing the pool.", "warn");
     return;
   }
 
   const shareUrl = buildShareUrl();
   if (!shareUrl) {
-    setShareFeedback("This plan is too large for a share link. Use Export JSON instead.", "warn");
+    setShareFeedback("This pool is too large for a share link. Use Export JSON instead.", "warn");
     return;
   }
 
   const shareData = {
-    title: `${state.plan.title} - Sufra Weekdays`,
-    text: `Meal plan for ${formatWeekRange(state.plan)}`,
+    title: `${state.collection.title} - Sufra Pool`,
+    text: `${state.recipes.length} recipes ready for non-repeating picks`,
     url: shareUrl,
   };
 
   if (navigator.share) {
     try {
       await navigator.share(shareData);
-      setShareFeedback("Week shared.", "ok");
+      setShareFeedback("Pool shared.", "ok");
       return;
     } catch (error) {
       if (error?.name === "AbortError") {
@@ -248,640 +456,983 @@ async function handleSharePlan() {
     return;
   }
 
-  window.prompt("Copy this share link.", shareUrl);
+  window.prompt("Copy this recipe-pool share link.", shareUrl);
   setShareFeedback("Share link ready.", "ok");
 }
 
 function handleImportPrompt() {
-  const value = window.prompt("Paste a Sufra share link or token.");
+  const value = window.prompt("Paste a Sufra share link, share token, or exported JSON.");
   if (!value) {
     return;
   }
 
   const payload = decodeSharedInput(value);
   if (!payload) {
-    setShareFeedback("That share link could not be read.", "warn");
+    setShareFeedback("That shared pool could not be read.", "warn");
     return;
   }
 
   importSharedPayload(payload);
 }
 
-function collectPlanFromForm() {
-  return {
-    title: normalizeTitle(dom.planTitle.value, "Weekday Flow"),
-    weekOf: normalizeWeekOf(dom.weekOf.value || getMondayInput()),
-    householdSize: normalizeHouseholdSize(dom.householdSize.value),
-    includeWeekend: dom.includeWeekend.checked,
-    note: normalizeParagraph(dom.planNote.value, 220),
-  };
+function exportPoolAsJson() {
+  if (!state.recipes.length) {
+    setShareFeedback("Add recipes before exporting the pool.", "warn");
+    return;
+  }
+
+  const payload = buildExportPayload();
+  const filename = `${slugify(state.collection.title || "sufra-pool")}.json`;
+  downloadTextFile(filename, `${JSON.stringify(payload, null, 2)}\n`, "application/json");
+  setShareFeedback("JSON export downloaded.", "ok");
 }
 
-function collectMealFromForm(currentMeal = null) {
-  const title = normalizeTitle(dom.mealTitle.value, "");
-  if (!title) {
-    dom.mealTitle.focus();
-    return null;
+function clearPool() {
+  const hasContent =
+    state.recipes.length ||
+    state.cycle.usedRecipeIds.length ||
+    state.collection.title !== "Sufra Pool" ||
+    state.collection.note;
+
+  if (!hasContent) {
+    return;
   }
 
-  const { links, invalid } = parseVideoLinks(dom.mealLinks.value);
-  if (invalid.length) {
-    window.alert(`These links could not be saved:\n${invalid.join("\n")}`);
-    return null;
+  const shouldClear = window.confirm(
+    "Clear this recipe pool, current picks, and no-repeat history from this device?",
+  );
+  if (!shouldClear) {
+    return;
   }
 
-  const nowIso = new Date().toISOString();
+  state = createDefaultState();
+  saveState();
+  syncCollectionForm();
+  syncFilterControls();
+  syncPickerControls();
+  resetRecipeForm();
+  dismissSharedNotice({ clearHash: false });
+  setPickerFeedback(
+    "Random picks only come from recipes that have not already been used in the current cycle.",
+    "muted",
+  );
+  setShareFeedback("Recipe pool cleared.", "muted");
+  render();
+}
 
-  return {
-    id: currentMeal?.id || newId(),
-    day: normalizeWeekday(dom.mealDay.value),
-    mealType: normalizeMealType(dom.mealType.value),
-    title,
-    prepMinutes: normalizePrepMinutes(dom.mealPrep.value),
-    ingredients: parseIngredients(dom.mealIngredients.value),
-    notes: normalizeParagraph(dom.mealNotes.value, 320),
-    videoLinks: links,
-    createdAt: currentMeal?.createdAt || nowIso,
-    updatedAt: nowIso,
-  };
+function importSharedPayload(payload) {
+  const importedState = normalizeState(payload);
+  const shouldReplace =
+    !state.recipes.length ||
+    window.confirm("Importing will replace the current recipe pool on this device. Continue?");
+
+  if (!shouldReplace) {
+    return;
+  }
+
+  state = importedState;
+  saveState();
+  syncCollectionForm();
+  syncFilterControls();
+  syncPickerControls();
+  resetRecipeForm();
+  dismissSharedNotice({ clearHash: true });
+  setShareFeedback("Shared pool imported.", "ok");
+  setPickerFeedback(
+    "Random picks only come from recipes that have not already been used in the current cycle.",
+    "muted",
+  );
+  render();
+}
+
+function pickRecipesWithoutRepeats() {
+  sanitizeCycle();
+
+  if (!state.recipes.length) {
+    setPickerFeedback("Add recipes first, then the randomizer can pick from the pool.", "warn");
+    return;
+  }
+
+  const typeFilter = normalizeMealTypeFilter(state.picker.typeFilter);
+  const requestedCount = normalizePickCount(state.picker.pickCount);
+  const eligibleRecipes = getEligibleRecipes(typeFilter);
+
+  if (!eligibleRecipes.length) {
+    setPickerFeedback(
+      `No unused ${formatPickerScope(typeFilter)} remain in this cycle. Reset the cycle or return a recipe to the pool.`,
+      "warn",
+    );
+    render();
+    return;
+  }
+
+  const selectedRecipes = shuffle(eligibleRecipes).slice(0, Math.min(requestedCount, eligibleRecipes.length));
+  const selectedIds = selectedRecipes.map((recipe) => recipe.id);
+
+  state.cycle.usedRecipeIds = uniqueIds([...state.cycle.usedRecipeIds, ...selectedIds]);
+  state.cycle.currentPickIds = selectedIds;
+
+  saveState();
+  render();
+
+  if (selectedRecipes.length < requestedCount) {
+    setPickerFeedback(
+      `Picked ${selectedRecipes.length} recipe${pluralize(selectedRecipes.length)} because that is all that remains without repeating.`,
+      "ok",
+    );
+    return;
+  }
+
+  setPickerFeedback(
+    `Picked ${selectedRecipes.length} ${formatPickerScope(typeFilter)} without repeats.`,
+    "ok",
+  );
+}
+
+function resetCycle() {
+  const hasCycle = state.cycle.usedRecipeIds.length || state.cycle.currentPickIds.length;
+  if (!hasCycle) {
+    setPickerFeedback("The no-repeat cycle is already clear.", "muted");
+    return;
+  }
+
+  const shouldReset = window.confirm(
+    "Reset the no-repeat cycle so every recipe becomes available again?",
+  );
+  if (!shouldReset) {
+    return;
+  }
+
+  state.cycle.usedRecipeIds = [];
+  state.cycle.currentPickIds = [];
+  saveState();
+  render();
+  setPickerFeedback("No-repeat cycle reset. Every recipe is available again.", "ok");
+}
+
+function markRecipeUsed(recipeId) {
+  state.cycle.usedRecipeIds = uniqueIds([...state.cycle.usedRecipeIds, recipeId]);
+  state.cycle.currentPickIds = state.cycle.currentPickIds.filter((id) => id !== recipeId);
+  saveState();
+  render();
+  setPickerFeedback("Recipe marked used and removed from the randomizer.", "ok");
+}
+
+function returnRecipeToPool(recipeId, message = "Recipe returned to the pool.") {
+  state.cycle.usedRecipeIds = state.cycle.usedRecipeIds.filter((id) => id !== recipeId);
+  state.cycle.currentPickIds = state.cycle.currentPickIds.filter((id) => id !== recipeId);
+  saveState();
+  render();
+  setPickerFeedback(message, "ok");
+}
+
+function editRecipe(recipeId) {
+  const recipe = state.recipes.find((item) => item.id === recipeId);
+  if (!recipe) {
+    return;
+  }
+
+  dom.recipeType.value = recipe.mealType;
+  dom.recipeTitle.value = recipe.title;
+  dom.recipePrep.value = recipe.prepMinutes ?? "";
+  dom.recipeIngredients.value = recipe.ingredients.join(", ");
+  dom.recipeNotes.value = recipe.notes;
+  dom.recipeLinks.value = recipe.links.map(formatLinkForTextarea).join("\n");
+  dom.editingRecipeId.value = recipe.id;
+  dom.composerHeading.textContent = "Edit Recipe";
+  dom.submitRecipe.textContent = "Save Changes";
+  dom.cancelEdit.classList.remove("hidden");
+  dom.recipeTitle.focus();
+}
+
+function removeRecipe(recipeId) {
+  const recipe = state.recipes.find((item) => item.id === recipeId);
+  if (!recipe) {
+    return;
+  }
+
+  const shouldRemove = window.confirm(`Remove "${recipe.title}" from the recipe pool?`);
+  if (!shouldRemove) {
+    return;
+  }
+
+  state.recipes = state.recipes.filter((item) => item.id !== recipeId);
+  state.cycle.usedRecipeIds = state.cycle.usedRecipeIds.filter((id) => id !== recipeId);
+  state.cycle.currentPickIds = state.cycle.currentPickIds.filter((id) => id !== recipeId);
+
+  if (dom.editingRecipeId.value === recipeId) {
+    resetRecipeForm();
+  }
+
+  saveState();
+  render();
+  setShareFeedback("Recipe removed from the pool.", "muted");
+}
+
+function resetRecipeForm({ preserveType = false } = {}) {
+  const nextType = preserveType ? normalizeMealType(dom.recipeType.value) : "dinner";
+  dom.recipeForm.reset();
+  dom.recipeType.value = nextType;
+  dom.editingRecipeId.value = "";
+  dom.composerHeading.textContent = "Add a Recipe";
+  dom.submitRecipe.textContent = "Add to Pool";
+  dom.cancelEdit.classList.add("hidden");
+}
+
+function syncCollectionForm() {
+  dom.collectionTitle.value = state.collection.title;
+  dom.collectionNote.value = state.collection.note;
+}
+
+function syncFilterControls() {
+  dom.searchQuery.value = state.filters.query;
+  dom.filterType.value = state.filters.type;
+  dom.filterAvailability.value = state.filters.availability;
+}
+
+function syncPickerControls() {
+  dom.pickerTypeFilter.value = state.picker.typeFilter;
+  dom.pickerCount.value = String(state.picker.pickCount);
 }
 
 function render() {
+  sanitizeCycle();
   renderHero();
   renderStats();
+  renderCurrentPicks();
   renderBoardHeading();
   renderBoard();
   renderSharedNotice();
 }
 
 function renderHero() {
-  dom.weekRange.textContent = formatWeekRange(state.plan);
-  dom.heroPlanName.textContent = `${state.plan.title} · ${formatHouseholdSize(state.plan.householdSize)}`;
-  dom.planFocusDisplay.textContent =
-    state.plan.note || "Add a week focus so the planner stays practical.";
-}
+  const totalRecipes = state.recipes.length;
+  const availableRecipes = getAvailableRecipes().length;
+  const usedRecipes = state.cycle.usedRecipeIds.length;
 
-function renderStats() {
-  const activeDayKeys = new Set(getPlanDays().map((day) => day.key));
-  const totalMeals = state.meals.filter((meal) => activeDayKeys.has(meal.day)).length;
-  const daysCovered = new Set(
-    state.meals.filter((meal) => activeDayKeys.has(meal.day)).map((meal) => meal.day),
-  ).size;
-  const totalLinks = state.meals.reduce((sum, meal) => sum + meal.videoLinks.length, 0);
+  dom.poolSummary.textContent = totalRecipes
+    ? `${totalRecipes} recipe${pluralize(totalRecipes)} in rotation`
+    : "No recipes in rotation yet";
+  dom.heroCollectionName.textContent = state.collection.title;
 
-  const prepValues = state.meals
-    .map((meal) => meal.prepMinutes)
-    .filter((value) => Number.isFinite(value));
-  const averagePrep = prepValues.length
-    ? Math.round(prepValues.reduce((sum, value) => sum + value, 0) / prepValues.length)
-    : null;
-
-  dom.statMeals.textContent = String(totalMeals);
-  dom.statDays.textContent = `${daysCovered} / ${getPlanDays().length}`;
-  dom.statLinks.textContent = String(totalLinks);
-  dom.statPrep.textContent = averagePrep === null ? "-" : `${averagePrep} min`;
-}
-
-function renderBoardHeading() {
-  if (state.plan.includeWeekend) {
-    dom.boardTitle.textContent = "Full Week Layout";
-    dom.boardCopy.textContent =
-      "Saturday and Sunday are enabled, so the board covers the whole week from Monday through Sunday.";
+  if (!totalRecipes && !state.collection.note) {
+    dom.poolStatusDisplay.textContent =
+      "Add recipes with links and the picker will avoid repeats automatically.";
     return;
   }
 
-  dom.boardTitle.textContent = "Weekday Layout";
+  const rotationSummary = `${availableRecipes} available now, ${usedRecipes} used in this cycle.`;
+  dom.poolStatusDisplay.textContent = state.collection.note
+    ? `${rotationSummary} ${state.collection.note}`
+    : rotationSummary;
+}
+
+function renderStats() {
+  dom.statRecipes.textContent = String(state.recipes.length);
+  dom.statAvailable.textContent = String(getAvailableRecipes().length);
+  dom.statUsed.textContent = String(state.cycle.usedRecipeIds.length);
+  dom.statLinks.textContent = String(
+    state.recipes.reduce((count, recipe) => count + recipe.links.length, 0),
+  );
+}
+
+function renderCurrentPicks() {
+  dom.currentPicks.replaceChildren();
+  const currentRecipes = state.cycle.currentPickIds
+    .map((recipeId) => state.recipes.find((recipe) => recipe.id === recipeId))
+    .filter(Boolean);
+
+  if (!currentRecipes.length) {
+    const emptyCopy = document.createElement("p");
+    emptyCopy.className = "empty-copy";
+    emptyCopy.textContent = "No picks yet. Tap Pick Recipes to choose from the pool.";
+    dom.currentPicks.append(emptyCopy);
+    return;
+  }
+
+  for (const recipe of currentRecipes) {
+    const fragment = dom.currentPickTemplate.content.cloneNode(true);
+    const card = fragment.querySelector(".current-pick-card");
+    const slot = fragment.querySelector(".current-pick-slot");
+    const title = fragment.querySelector(".current-pick-title");
+    const prep = fragment.querySelector(".current-pick-prep");
+    const notes = fragment.querySelector(".current-pick-notes");
+    const links = fragment.querySelector(".current-pick-links");
+    const embeds = fragment.querySelector(".current-pick-embeds");
+    const returnButton = fragment.querySelector(".return");
+
+    slot.textContent = getMealTypeLabel(recipe.mealType);
+    title.textContent = recipe.title;
+    prep.textContent = formatPrepMinutes(recipe.prepMinutes);
+    notes.textContent = getRecipeSummary(recipe);
+    renderLinks(links, recipe.links);
+    renderEmbeds(embeds, recipe.links);
+
+    returnButton.addEventListener("click", () => {
+      returnRecipeToPool(recipe.id, "Current pick returned to the pool.");
+    });
+
+    dom.currentPicks.append(card);
+  }
+}
+
+function renderBoardHeading() {
+  const filterLabel = getMealTypeLabel(state.filters.type);
+  const visibleCount = getVisibleRecipes().length;
+
+  dom.boardTitle.textContent = state.filters.type === "all" ? "Pool by Meal Slot" : `${filterLabel} Pool`;
+
+  if (!state.recipes.length) {
+    dom.boardCopy.textContent =
+      "Start by adding recipes. The randomizer will keep them out of rotation after each pick.";
+    return;
+  }
+
+  if (!visibleCount) {
+    dom.boardCopy.textContent = "No recipes match the current search or filter settings.";
+    return;
+  }
+
   dom.boardCopy.textContent =
-    "Saturday and Sunday stay optional, so the planner can stay weekday-first when you want it to.";
+    `${visibleCount} recipe${pluralize(visibleCount)} shown. Current picks count as used until you return them or reset the cycle.`;
 }
 
 function renderBoard() {
-  dom.weekdayBoard.innerHTML = "";
+  dom.recipeBoard.replaceChildren();
+  const typesToRender =
+    state.filters.type === "all"
+      ? MEAL_TYPES
+      : MEAL_TYPES.filter((type) => type.key === state.filters.type);
 
-  const activeDays = getPlanDays();
-  const daysToRender =
-    state.filters.day === "all"
-      ? activeDays
-      : activeDays.filter((day) => day.key === state.filters.day);
+  for (const type of typesToRender) {
+    const recipes = sortRecipesForDisplay(getVisibleRecipesByType(type.key));
+    const availableCount = recipes.filter((recipe) => getRecipeStatus(recipe) === "available").length;
+    const fragment = dom.recipeColumnTemplate.content.cloneNode(true);
+    const column = fragment.querySelector(".recipe-column");
+    const slot = fragment.querySelector(".column-slot");
+    const title = fragment.querySelector(".column-title");
+    const summary = fragment.querySelector(".column-summary");
+    const recipeList = fragment.querySelector(".column-recipes");
+    const emptyCopy = fragment.querySelector(".column-empty");
 
-  daysToRender.forEach((day) => {
-    const fragment = dom.dayColumnTemplate.content.cloneNode(true);
-    const column = fragment.querySelector(".day-column");
-    const nameEl = fragment.querySelector(".day-name");
-    const dateEl = fragment.querySelector(".day-date");
-    const summaryEl = fragment.querySelector(".day-summary");
-    const mealsEl = fragment.querySelector(".day-meals");
-    const emptyEl = fragment.querySelector(".day-empty");
+    slot.textContent = "Meal slot";
+    title.textContent = type.label;
+    summary.textContent = recipes.length
+      ? `${recipes.length} recipe${pluralize(recipes.length)} · ${availableCount} available`
+      : "No matching recipes";
 
-    const date = addDays(parseDateInput(state.plan.weekOf), day.offset);
-    const allMeals = sortMeals(state.meals.filter((meal) => meal.day === day.key));
-    const visibleMeals = getVisibleMeals(allMeals);
+    if (recipes.length) {
+      emptyCopy.classList.add("hidden");
+      for (const recipe of recipes) {
+        recipeList.append(renderRecipeCard(recipe));
+      }
+    }
 
-    nameEl.textContent = day.label;
-    dateEl.textContent = formatColumnDate(date);
-    summaryEl.textContent = formatDaySummary(allMeals);
-
-    visibleMeals.forEach((meal) => {
-      mealsEl.appendChild(renderMealCard(meal));
-    });
-
-    const hasFilters = Boolean(
-      state.filters.query || state.filters.day !== "all" || state.filters.links !== "all",
-    );
-    const showEmpty = visibleMeals.length === 0;
-
-    emptyEl.textContent = showEmpty
-      ? hasFilters && allMeals.length
-        ? "Meals exist here, but none match the current filters."
-        : "No meals planned for this day yet."
-      : "";
-    emptyEl.classList.toggle("hidden", !showEmpty);
-
-    dom.weekdayBoard.appendChild(column);
-  });
+    dom.recipeBoard.append(column);
+  }
 }
 
-function renderMealCard(meal) {
-  const fragment = dom.mealCardTemplate.content.cloneNode(true);
-  const card = fragment.querySelector(".meal-card");
-  const mealTypePill = fragment.querySelector(".meal-type-pill");
-  const prepEl = fragment.querySelector(".meal-prep");
-  const titleEl = fragment.querySelector(".meal-card-title");
-  const notesEl = fragment.querySelector(".meal-card-notes");
-  const ingredientsEl = fragment.querySelector(".ingredient-chips");
-  const videoLinksEl = fragment.querySelector(".video-link-row");
-  const embedStackEl = fragment.querySelector(".embed-stack");
+function renderRecipeCard(recipe) {
+  const fragment = dom.recipeCardTemplate.content.cloneNode(true);
+  const card = fragment.querySelector(".recipe-card");
+  const typePill = fragment.querySelector(".recipe-type-pill");
+  const statusPill = fragment.querySelector(".recipe-status-pill");
+  const prepPill = fragment.querySelector(".recipe-prep");
+  const title = fragment.querySelector(".recipe-card-title");
+  const notes = fragment.querySelector(".recipe-card-notes");
+  const ingredients = fragment.querySelector(".ingredient-chips");
+  const links = fragment.querySelector(".video-link-row");
+  const embeds = fragment.querySelector(".embed-stack");
+  const toggleButton = fragment.querySelector(".toggle");
   const editButton = fragment.querySelector(".edit");
   const removeButton = fragment.querySelector(".remove");
+  const status = getRecipeStatus(recipe);
 
-  mealTypePill.textContent = labelForMealType(meal.mealType);
-  prepEl.textContent = meal.prepMinutes === null ? "Prep flexible" : `${meal.prepMinutes} min`;
-  titleEl.textContent = meal.title;
+  card.classList.add(`is-${status}`);
+  typePill.textContent = getMealTypeLabel(recipe.mealType);
+  prepPill.textContent = formatPrepMinutes(recipe.prepMinutes);
+  title.textContent = recipe.title;
+  notes.textContent = getRecipeSummary(recipe);
+  statusPill.textContent = getStatusLabel(status);
+  statusPill.classList.add(`status-${status}`);
 
-  notesEl.textContent = meal.notes;
-  notesEl.classList.toggle("hidden", !meal.notes);
+  renderIngredients(ingredients, recipe.ingredients);
+  renderLinks(links, recipe.links);
+  renderEmbeds(embeds, recipe.links);
 
-  ingredientsEl.innerHTML = "";
-  meal.ingredients.forEach((ingredient) => {
-    const chip = document.createElement("li");
-    chip.textContent = ingredient;
-    ingredientsEl.appendChild(chip);
-  });
-  ingredientsEl.classList.toggle("hidden", meal.ingredients.length === 0);
+  if (status === "available") {
+    toggleButton.textContent = "Mark Used";
+    toggleButton.classList.remove("is-return");
+    toggleButton.addEventListener("click", () => markRecipeUsed(recipe.id));
+  } else {
+    toggleButton.textContent = "Return to Pool";
+    toggleButton.classList.add("is-return");
+    toggleButton.addEventListener("click", () => returnRecipeToPool(recipe.id));
+  }
 
-  videoLinksEl.innerHTML = "";
-  embedStackEl.innerHTML = "";
-
-  meal.videoLinks.forEach((url, index) => {
-    const metadata = describeVideoLink(url);
-    const link = document.createElement("a");
-    link.className = "video-link";
-    link.href = url;
-    link.target = "_blank";
-    link.rel = "noreferrer";
-    link.textContent = metadata.linkLabel || `Video ${index + 1}`;
-    videoLinksEl.appendChild(link);
-
-    if (metadata.embedUrl) {
-      embedStackEl.appendChild(createEmbedPreview(metadata));
-    }
-  });
-
-  videoLinksEl.classList.toggle("hidden", meal.videoLinks.length === 0);
-  embedStackEl.classList.toggle(
-    "hidden",
-    !meal.videoLinks.some((url) => Boolean(describeVideoLink(url).embedUrl)),
-  );
-
-  editButton.addEventListener("click", () => startEditingMeal(meal.id));
-  removeButton.addEventListener("click", () => removeMeal(meal.id));
+  editButton.addEventListener("click", () => editRecipe(recipe.id));
+  removeButton.addEventListener("click", () => removeRecipe(recipe.id));
 
   return card;
 }
 
-function createEmbedPreview(metadata) {
-  const details = document.createElement("details");
-  details.className = "embed-preview";
-
-  const summary = document.createElement("summary");
-  summary.textContent = `Preview ${metadata.providerLabel}`;
-
-  const frame = document.createElement("div");
-  frame.className = "embed-frame";
-
-  const iframe = document.createElement("iframe");
-  iframe.loading = "lazy";
-  iframe.allow =
-    "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
-  iframe.allowFullscreen = true;
-  iframe.src = metadata.embedUrl;
-  iframe.title = metadata.providerLabel;
-
-  frame.appendChild(iframe);
-  details.append(summary, frame);
-
-  return details;
-}
-
-function startEditingMeal(mealId) {
-  const meal = state.meals.find((item) => item.id === mealId);
-  if (!meal) {
+function renderIngredients(container, ingredients) {
+  container.replaceChildren();
+  if (!ingredients.length) {
+    container.classList.add("hidden");
     return;
   }
 
-  dom.composerHeading.textContent = "Edit Dish";
-  dom.submitMeal.textContent = "Save Changes";
-  dom.cancelEdit.classList.remove("hidden");
-  dom.editingMealId.value = meal.id;
-  syncSelectableDays(meal.day);
-  dom.mealDay.value = meal.day;
-  dom.mealType.value = meal.mealType;
-  dom.mealTitle.value = meal.title;
-  dom.mealPrep.value = meal.prepMinutes === null ? "" : String(meal.prepMinutes);
-  dom.mealIngredients.value = meal.ingredients.join(", ");
-  dom.mealNotes.value = meal.notes;
-  dom.mealLinks.value = meal.videoLinks.join("\n");
-
-  dom.mealForm.scrollIntoView({ behavior: "smooth", block: "start" });
-  dom.mealTitle.focus();
+  container.classList.remove("hidden");
+  for (const ingredient of ingredients) {
+    const item = document.createElement("li");
+    item.textContent = ingredient;
+    container.append(item);
+  }
 }
 
-function removeMeal(mealId) {
-  const meal = state.meals.find((item) => item.id === mealId);
-  if (!meal) {
+function renderLinks(container, links) {
+  container.replaceChildren();
+  if (!links.length) {
+    container.classList.add("hidden");
     return;
   }
 
-  const shouldRemove = window.confirm(`Remove "${meal.title}" from the week?`);
-  if (!shouldRemove) {
+  container.classList.remove("hidden");
+  for (const link of links) {
+    const anchor = document.createElement("a");
+    anchor.className = "video-link";
+    anchor.href = link.url;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    anchor.textContent = link.label;
+    container.append(anchor);
+  }
+}
+
+function renderEmbeds(container, links) {
+  if (!container) {
     return;
   }
 
-  state.meals = state.meals.filter((item) => item.id !== mealId);
-  saveState();
-  render();
+  container.replaceChildren();
+  const embeddableLinks = links
+    .map((link) => ({ link, embed: getEmbedDetails(link.url) }))
+    .filter((item) => item.embed);
 
-  if (dom.editingMealId.value === mealId) {
-    resetMealForm({ preserveDay: true });
-  }
-}
-
-function exportPlanAsJson() {
-  const payload = {
-    exportedAt: new Date().toISOString(),
-    plan: state.plan,
-    meals: sortMeals(state.meals),
-  };
-
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {
-    type: "application/json;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `sufra-weekdays-${state.plan.weekOf}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function clearWeek() {
-  const shouldClear = window.confirm("Clear the saved week details and all planned meals?");
-  if (!shouldClear) {
+  if (!embeddableLinks.length) {
+    container.classList.add("hidden");
     return;
   }
 
-  state.plan = getDefaultPlan();
-  state.meals = [];
-  state.filters = getDefaultFilters();
+  container.classList.remove("hidden");
 
-  saveState();
-  syncPlanForm();
-  syncSelectableDays();
-  syncFilterControls();
-  resetMealForm();
-  render();
-  setShareFeedback("Week cleared.", "muted");
-}
+  for (const item of embeddableLinks) {
+    const details = document.createElement("details");
+    details.className = "embed-preview";
 
-function importSharedPayload(payload) {
-  state.plan = sanitizePlan(payload.plan);
-  state.meals = sanitizeMeals(payload.meals);
-  state.filters = getDefaultFilters();
+    const summary = document.createElement("summary");
+    summary.textContent = `Preview ${item.embed.provider}`;
 
-  saveState();
-  dismissSharedNotice({ clearHash: true, skipRender: true });
-  syncPlanForm();
-  syncSelectableDays();
-  syncFilterControls();
-  resetMealForm();
-  render();
-  setShareFeedback("Shared week imported.", "ok");
-}
+    const frame = document.createElement("div");
+    frame.className = "embed-frame";
 
-function dismissSharedNotice(options = {}) {
-  pendingSharedPayload = null;
+    const iframe = document.createElement("iframe");
+    iframe.src = item.embed.embedUrl;
+    iframe.title = `${item.embed.provider} preview`;
+    iframe.loading = "lazy";
+    iframe.allow =
+      "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+    iframe.allowFullscreen = true;
 
-  if (options.clearHash) {
-    clearShareHash();
-  }
-
-  if (!options.skipRender) {
-    renderSharedNotice();
+    frame.append(iframe);
+    details.append(summary, frame);
+    container.append(details);
   }
 }
 
-function renderSharedNotice() {
-  const hasPayload = Boolean(pendingSharedPayload);
-  dom.sharedBanner.classList.toggle("hidden", !hasPayload);
-
-  if (!hasPayload) {
-    dom.sharedBannerText.textContent = "";
-    return;
-  }
-
-  const sharedMeals = Array.isArray(pendingSharedPayload.meals) ? pendingSharedPayload.meals : [];
-  const sharedDays = new Set(sharedMeals.map((meal) => meal.day)).size;
-  dom.sharedBannerText.textContent = `${pendingSharedPayload.plan.title} is ready to import with ${sharedMeals.length} meals across ${sharedDays} day${sharedDays === 1 ? "" : "s"}.`;
+function getVisibleRecipes() {
+  return state.recipes.filter((recipe) => matchesFilters(recipe));
 }
 
-function resetMealForm(options = {}) {
-  dom.composerHeading.textContent = "Compose a Dish";
-  dom.submitMeal.textContent = "Add to Week";
-  dom.cancelEdit.classList.add("hidden");
-  dom.editingMealId.value = "";
-  dom.mealType.value = "dinner";
-  dom.mealTitle.value = "";
-  dom.mealPrep.value = "";
-  dom.mealIngredients.value = "";
-  dom.mealNotes.value = "";
-  dom.mealLinks.value = "";
-
-  syncSelectableDays();
-
-  if (!options.preserveDay || !getPlanDays().some((day) => day.key === dom.mealDay.value)) {
-    dom.mealDay.value = getDefaultMealDay();
-  }
+function getVisibleRecipesByType(mealType) {
+  return state.recipes.filter((recipe) => recipe.mealType === mealType && matchesFilters(recipe));
 }
 
-function syncPlanForm() {
-  dom.planTitle.value = state.plan.title;
-  dom.weekOf.value = state.plan.weekOf;
-  dom.householdSize.value = String(state.plan.householdSize);
-  dom.includeWeekend.checked = state.plan.includeWeekend;
-  dom.planNote.value = state.plan.note;
-}
-
-function syncSelectableDays(preferredMealDay = dom.mealDay.value) {
-  const activeDays = getPlanDays();
-
-  populateDaySelect(dom.mealDay, activeDays, preferredMealDay || getDefaultMealDay());
-
-  state.filters.day = normalizeFilterDay(state.filters.day, activeDays);
-  populateFilterDaySelect(dom.filterDay, activeDays, state.filters.day);
-}
-
-function syncFilterControls() {
-  dom.searchQuery.value = state.filters.query;
-  dom.filterLinks.value = state.filters.links;
-  populateFilterDaySelect(dom.filterDay, getPlanDays(), state.filters.day);
-}
-
-function populateDaySelect(selectElement, days, selectedValue) {
-  selectElement.innerHTML = "";
-
-  days.forEach((day) => {
-    const option = document.createElement("option");
-    option.value = day.key;
-    option.textContent = day.label;
-    selectElement.appendChild(option);
-  });
-
-  const fallback = days[0]?.key || "monday";
-  selectElement.value = days.some((day) => day.key === selectedValue) ? selectedValue : fallback;
-}
-
-function populateFilterDaySelect(selectElement, days, selectedValue) {
-  selectElement.innerHTML = "";
-
-  const allOption = document.createElement("option");
-  allOption.value = "all";
-  allOption.textContent = "All visible days";
-  selectElement.appendChild(allOption);
-
-  days.forEach((day) => {
-    const option = document.createElement("option");
-    option.value = day.key;
-    option.textContent = day.label;
-    selectElement.appendChild(option);
-  });
-
-  selectElement.value = selectedValue === "all" ? "all" : normalizeFilterDay(selectedValue, days);
-}
-
-function getVisibleMeals(meals) {
-  return meals.filter((meal) => {
-    if (state.filters.day !== "all" && meal.day !== state.filters.day) {
+function getAvailableRecipes(typeFilter = "all") {
+  return state.recipes.filter((recipe) => {
+    if (typeFilter !== "all" && recipe.mealType !== typeFilter) {
       return false;
     }
 
-    if (state.filters.links === "video" && meal.videoLinks.length === 0) {
-      return false;
-    }
-
-    if (
-      state.filters.links === "embed" &&
-      !meal.videoLinks.some((url) => Boolean(describeVideoLink(url).embedUrl))
-    ) {
-      return false;
-    }
-
-    if (!state.filters.query) {
-      return true;
-    }
-
-    const searchTarget = [
-      meal.title,
-      meal.notes,
-      meal.ingredients.join(" "),
-      meal.videoLinks.join(" "),
-      labelForMealType(meal.mealType),
-    ]
-      .join(" ")
-      .toLowerCase();
-
-    return searchTarget.includes(state.filters.query.toLowerCase());
+    return getRecipeStatus(recipe) === "available";
   });
 }
 
-function sortMeals(meals) {
-  return [...meals].sort((left, right) => {
-    const dayDelta = dayOrder.get(left.day) - dayOrder.get(right.day);
-    if (dayDelta !== 0) {
-      return dayDelta;
+function getEligibleRecipes(typeFilter = "all") {
+  return getAvailableRecipes(typeFilter);
+}
+
+function matchesFilters(recipe) {
+  if (state.filters.type !== "all" && recipe.mealType !== state.filters.type) {
+    return false;
+  }
+
+  const status = getRecipeStatus(recipe);
+  if (state.filters.availability === "available" && status !== "available") {
+    return false;
+  }
+
+  if (state.filters.availability === "used" && status === "available") {
+    return false;
+  }
+
+  const query = normalizeText(state.filters.query);
+  if (!query) {
+    return true;
+  }
+
+  const haystack = normalizeText(
+    [
+      recipe.title,
+      recipe.notes,
+      recipe.ingredients.join(" "),
+      recipe.links.map((link) => `${link.label} ${link.host}`).join(" "),
+      getMealTypeLabel(recipe.mealType),
+    ].join(" "),
+  );
+
+  return haystack.includes(query);
+}
+
+function getRecipeStatus(recipe) {
+  if (state.cycle.currentPickIds.includes(recipe.id)) {
+    return "current";
+  }
+
+  if (state.cycle.usedRecipeIds.includes(recipe.id)) {
+    return "used";
+  }
+
+  return "available";
+}
+
+function sanitizeCycle() {
+  const validIds = new Set(state.recipes.map((recipe) => recipe.id));
+  const currentPickIds = uniqueIds(state.cycle.currentPickIds).filter((id) => validIds.has(id));
+  const usedRecipeIds = uniqueIds([...state.cycle.usedRecipeIds, ...currentPickIds]).filter((id) =>
+    validIds.has(id),
+  );
+
+  const cycleChanged =
+    currentPickIds.length !== state.cycle.currentPickIds.length ||
+    usedRecipeIds.length !== state.cycle.usedRecipeIds.length ||
+    currentPickIds.some((id, index) => id !== state.cycle.currentPickIds[index]) ||
+    usedRecipeIds.some((id, index) => id !== state.cycle.usedRecipeIds[index]);
+
+  if (!cycleChanged) {
+    return;
+  }
+
+  state.cycle.currentPickIds = currentPickIds;
+  state.cycle.usedRecipeIds = usedRecipeIds;
+  saveState();
+}
+
+function sortRecipesForDisplay(recipes) {
+  return [...recipes].sort((left, right) => {
+    const statusDiff = statusOrder.get(getRecipeStatus(left)) - statusOrder.get(getRecipeStatus(right));
+    if (statusDiff) {
+      return statusDiff;
     }
 
-    const mealDelta = mealTypeOrder.get(left.mealType) - mealTypeOrder.get(right.mealType);
-    if (mealDelta !== 0) {
-      return mealDelta;
-    }
-
-    const prepDelta =
-      (left.prepMinutes ?? Number.POSITIVE_INFINITY) -
-      (right.prepMinutes ?? Number.POSITIVE_INFINITY);
-    if (prepDelta !== 0) {
-      return prepDelta;
+    const typeDiff = mealTypeOrder.get(left.mealType) - mealTypeOrder.get(right.mealType);
+    if (typeDiff) {
+      return typeDiff;
     }
 
     return left.title.localeCompare(right.title);
   });
 }
 
-function loadState() {
-  const fallback = {
-    plan: getDefaultPlan(),
-    meals: [],
-    filters: getDefaultFilters(),
+function setShareFeedback(message, tone = "muted") {
+  dom.shareFeedback.textContent = message;
+  dom.shareFeedback.classList.remove("ok", "warn", "muted");
+  dom.shareFeedback.classList.add(tone);
+}
+
+function setPickerFeedback(message, tone = "muted") {
+  dom.pickerFeedback.textContent = message;
+  dom.pickerFeedback.classList.remove("ok", "warn", "muted");
+  dom.pickerFeedback.classList.add(tone);
+}
+
+function buildShareUrl() {
+  const payload = buildExportPayload();
+  const token = encodeSharePayload(payload);
+  if (!token) {
+    return null;
+  }
+
+  const shareUrl = `${window.location.href.split("#")[0]}${SHARE_HASH_PREFIX}${token}`;
+  if (shareUrl.length > 1800) {
+    return null;
+  }
+
+  return shareUrl;
+}
+
+function buildExportPayload() {
+  return {
+    app: "sufra-pool",
+    version: 1,
+    collection: state.collection,
+    recipes: state.recipes,
+    cycle: state.cycle,
+    picker: state.picker,
   };
+}
+
+function encodeSharePayload(payload) {
+  try {
+    const json = JSON.stringify(payload);
+    const bytes = new TextEncoder().encode(json);
+    let binary = "";
+
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  } catch (error) {
+    return null;
+  }
+}
+
+function decodeSharedInput(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith("{")) {
+    try {
+      return normalizeState(JSON.parse(trimmed));
+    } catch (error) {
+      return null;
+    }
+  }
+
+  let token = trimmed;
+
+  if (trimmed.includes(SHARE_HASH_PREFIX)) {
+    const hashIndex = trimmed.indexOf(SHARE_HASH_PREFIX);
+    token = trimmed.slice(hashIndex + SHARE_HASH_PREFIX.length);
+  } else {
+    try {
+      const parsedUrl = new URL(trimmed);
+      if (parsedUrl.hash.startsWith(SHARE_HASH_PREFIX)) {
+        token = parsedUrl.hash.slice(SHARE_HASH_PREFIX.length);
+      }
+    } catch (error) {
+      token = trimmed;
+    }
+  }
+
+  return decodeShareToken(token);
+}
+
+function decodeShareToken(token) {
+  const normalizedToken = String(token || "")
+    .trim()
+    .replace(/^#?pool=/, "")
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+
+  if (!normalizedToken) {
+    return null;
+  }
+
+  const paddedToken = normalizedToken.padEnd(Math.ceil(normalizedToken.length / 4) * 4, "=");
 
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return fallback;
+    const binary = atob(paddedToken);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
+    return normalizeState(JSON.parse(json));
+  } catch (error) {
+    return null;
+  }
+}
+
+function readSharedPayloadFromLocation() {
+  if (!window.location.hash.startsWith(SHARE_HASH_PREFIX)) {
+    return null;
+  }
+
+  return decodeShareToken(window.location.hash.slice(SHARE_HASH_PREFIX.length));
+}
+
+function handleHashChange() {
+  pendingSharedPayload = readSharedPayloadFromLocation();
+  renderSharedNotice();
+}
+
+function renderSharedNotice() {
+  if (!pendingSharedPayload) {
+    dom.sharedBanner.classList.add("hidden");
+    dom.sharedBannerText.textContent = "";
+    return;
+  }
+
+  const title = pendingSharedPayload.collection.title;
+  const count = pendingSharedPayload.recipes.length;
+  dom.sharedBannerText.textContent = `${title} with ${count} recipe${pluralize(count)} is ready to import.`;
+  dom.sharedBanner.classList.remove("hidden");
+}
+
+function dismissSharedNotice({ clearHash = false } = {}) {
+  pendingSharedPayload = null;
+  dom.sharedBanner.classList.add("hidden");
+  dom.sharedBannerText.textContent = "";
+
+  if (clearHash) {
+    history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  }
+}
+
+async function copyText(value) {
+  if (!navigator.clipboard?.writeText) {
+    return false;
+  }
+
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function downloadTextFile(filename, contents, mimeType) {
+  const blob = new Blob([contents], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function parseRecipeLinks(text) {
+  const lines = String(text || "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const links = [];
+  const invalid = [];
+
+  for (const line of lines) {
+    const link = parseLinkInput(line);
+    if (!link) {
+      invalid.push(line);
+      continue;
     }
 
-    const parsed = JSON.parse(raw);
-    const plan = sanitizePlan(parsed?.plan);
+    links.push(link);
+  }
+
+  return {
+    links: dedupeLinks(links),
+    invalid,
+  };
+}
+
+function parseLinkInput(line) {
+  if (!line) {
+    return null;
+  }
+
+  const parts = line.split("|");
+  const hasLabel = parts.length > 1;
+  const label = hasLabel ? parts.shift().trim() : "";
+  const urlPart = hasLabel ? parts.join("|").trim() : line.trim();
+
+  return buildLinkRecord(urlPart, label);
+}
+
+function buildLinkRecord(urlValue, labelValue = "", id = null) {
+  const parsedUrl = safeUrl(urlValue);
+  if (!parsedUrl) {
+    return null;
+  }
+
+  return {
+    id: id || newId(),
+    url: parsedUrl.toString(),
+    host: parsedUrl.hostname.replace(/^www\./i, ""),
+    label: normalizeTitle(labelValue, deriveLinkLabel(parsedUrl)),
+  };
+}
+
+function safeUrl(value) {
+  const candidate = String(value || "").trim();
+  if (!candidate) {
+    return null;
+  }
+
+  const normalizedCandidate = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(candidate)
+    ? candidate
+    : `https://${candidate.replace(/^\/+/, "")}`;
+
+  try {
+    return new URL(normalizedCandidate);
+  } catch (error) {
+    return null;
+  }
+}
+
+function deriveLinkLabel(parsedUrl) {
+  const embed = getEmbedDetails(parsedUrl.toString());
+  if (embed) {
+    return embed.provider;
+  }
+
+  return parsedUrl.hostname.replace(/^www\./i, "");
+}
+
+function getEmbedDetails(url) {
+  let parsedUrl;
+
+  try {
+    parsedUrl = new URL(url);
+  } catch (error) {
+    return null;
+  }
+
+  const host = parsedUrl.hostname.replace(/^www\./i, "").toLowerCase();
+
+  if (host === "youtu.be" || host.endsWith("youtube.com")) {
+    const videoId = getYouTubeVideoId(parsedUrl);
+    if (!videoId) {
+      return null;
+    }
 
     return {
-      plan,
-      meals: sanitizeMeals(parsed?.meals),
-      filters: sanitizeFilters(parsed?.filters, plan),
+      provider: "YouTube",
+      embedUrl: `https://www.youtube.com/embed/${videoId}`,
     };
-  } catch {
-    return fallback;
-  }
-}
-
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
-function sanitizePlan(plan) {
-  return {
-    title: normalizeTitle(plan?.title, "Weekday Flow"),
-    weekOf: normalizeWeekOf(plan?.weekOf || getMondayInput()),
-    householdSize: normalizeHouseholdSize(plan?.householdSize),
-    includeWeekend: plan?.includeWeekend === true,
-    note: normalizeParagraph(plan?.note, 220),
-  };
-}
-
-function sanitizeMeals(meals) {
-  if (!Array.isArray(meals)) {
-    return [];
   }
 
-  return meals.reduce((list, meal) => {
-    const title = normalizeTitle(meal?.title, "");
-    if (!title) {
-      return list;
+  if (host === "vimeo.com" || host.endsWith(".vimeo.com")) {
+    const videoId = getVimeoVideoId(parsedUrl);
+    if (!videoId) {
+      return null;
     }
 
-    list.push({
-      id: typeof meal?.id === "string" && meal.id ? meal.id : newId(),
-      day: normalizeWeekday(meal?.day),
-      mealType: normalizeMealType(meal?.mealType),
-      title,
-      prepMinutes: normalizePrepMinutes(meal?.prepMinutes),
-      ingredients: Array.isArray(meal?.ingredients)
-        ? meal.ingredients.map((item) => normalizeIngredient(item)).filter(Boolean)
-        : [],
-      notes: normalizeParagraph(meal?.notes, 320),
-      videoLinks: Array.isArray(meal?.videoLinks)
-        ? meal.videoLinks.map((link) => normalizeUrl(link)).filter(Boolean)
-        : [],
-      createdAt: typeof meal?.createdAt === "string" ? meal.createdAt : new Date().toISOString(),
-      updatedAt: typeof meal?.updatedAt === "string" ? meal.updatedAt : new Date().toISOString(),
-    });
+    return {
+      provider: "Vimeo",
+      embedUrl: `https://player.vimeo.com/video/${videoId}`,
+    };
+  }
 
-    return list;
-  }, []);
+  return null;
 }
 
-function sanitizeFilters(filters, plan = state?.plan || getDefaultPlan()) {
-  return {
-    query: normalizeText(filters?.query),
-    day: normalizeFilterDay(filters?.day, getPlanDays(plan)),
-    links: normalizeLinkFilter(filters?.links),
-  };
+function getYouTubeVideoId(parsedUrl) {
+  const host = parsedUrl.hostname.replace(/^www\./i, "").toLowerCase();
+
+  if (host === "youtu.be") {
+    return parsedUrl.pathname.replace(/^\/+/, "").split("/")[0] || null;
+  }
+
+  if (parsedUrl.searchParams.get("v")) {
+    return parsedUrl.searchParams.get("v");
+  }
+
+  const pathParts = parsedUrl.pathname.split("/").filter(Boolean);
+  if (pathParts[0] === "embed" || pathParts[0] === "shorts") {
+    return pathParts[1] || null;
+  }
+
+  return null;
 }
 
-function getDefaultPlan() {
-  return {
-    title: "Weekday Flow",
-    weekOf: getMondayInput(),
-    householdSize: 4,
-    includeWeekend: false,
-    note: "",
-  };
+function getVimeoVideoId(parsedUrl) {
+  const pathParts = parsedUrl.pathname.split("/").filter(Boolean).reverse();
+  return pathParts.find((part) => /^\d+$/.test(part)) || null;
 }
 
-function getDefaultFilters() {
-  return {
-    query: "",
-    day: "all",
-    links: "all",
-  };
+function formatLinkForTextarea(link) {
+  const label = normalizeTitle(link?.label, "");
+  return label ? `${label} | ${link.url}` : link.url;
 }
 
-function getPlanDays(plan = state.plan) {
-  return plan.includeWeekend ? ALL_DAYS : CORE_DAYS;
+function getRecipeSummary(recipe) {
+  if (recipe.notes) {
+    return recipe.notes;
+  }
+
+  if (recipe.ingredients.length) {
+    return `Ingredients: ${recipe.ingredients.join(", ")}`;
+  }
+
+  return "No notes added yet.";
 }
 
-function isWeekendDay(dayKey) {
-  return WEEKEND_DAYS.some((day) => day.key === dayKey);
+function getStatusLabel(status) {
+  if (status === "current") {
+    return "Current Pick";
+  }
+
+  if (status === "used") {
+    return "Used";
+  }
+
+  return "Available";
 }
 
-function normalizeWeekday(value) {
-  return ALL_DAYS.some((day) => day.key === value) ? value : "monday";
+function formatPrepMinutes(value) {
+  return value ? `${value} min` : "Prep flexible";
+}
+
+function formatPickerScope(filterValue) {
+  if (filterValue === "all") {
+    return "recipes";
+  }
+
+  return `${getMealTypeLabel(filterValue).toLowerCase()} recipes`;
+}
+
+function getMealTypeLabel(value) {
+  if (value === "all") {
+    return "All Slots";
+  }
+
+  return MEAL_TYPES.find((type) => type.key === value)?.label || "Dinner";
 }
 
 function normalizeMealType(value) {
   return MEAL_TYPES.some((type) => type.key === value) ? value : "dinner";
 }
 
-function normalizeFilterDay(value, days = getPlanDays()) {
-  if (value === "all") {
-    return "all";
+function normalizeMealTypeFilter(value) {
+  return value === "all" || MEAL_TYPES.some((type) => type.key === value) ? value : "all";
+}
+
+function normalizeAvailability(value) {
+  return value === "available" || value === "used" ? value : "all";
+}
+
+function normalizePickCount(value) {
+  const parsedValue = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsedValue)) {
+    return 1;
   }
 
-  return days.some((day) => day.key === value) ? value : "all";
-}
-
-function normalizeLinkFilter(value) {
-  return ["all", "video", "embed"].includes(value) ? value : "all";
-}
-
-function normalizeTitle(value, fallback = "") {
-  const text = normalizeText(value).slice(0, 80);
-  return text || fallback;
-}
-
-function normalizeParagraph(value, maxLength) {
-  return normalizeText(value).slice(0, maxLength);
-}
-
-function normalizeText(value) {
-  return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
-}
-
-function normalizeHouseholdSize(value) {
-  const number = Number.parseInt(String(value), 10);
-  if (!Number.isFinite(number)) {
-    return 4;
-  }
-
-  return Math.min(20, Math.max(1, number));
+  return Math.min(4, Math.max(1, parsedValue));
 }
 
 function normalizePrepMinutes(value) {
@@ -889,402 +1440,137 @@ function normalizePrepMinutes(value) {
     return null;
   }
 
-  const number = Number.parseInt(String(value), 10);
-  if (!Number.isFinite(number)) {
+  const parsedValue = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsedValue) || parsedValue < 0) {
     return null;
   }
 
-  return Math.min(600, Math.max(0, number));
+  return Math.min(600, parsedValue);
+}
+
+function normalizeTitle(value, fallback) {
+  const normalizedValue = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+
+  return normalizedValue || fallback;
+}
+
+function normalizeParagraph(value, limit) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, limit);
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function parseIngredients(value) {
-  if (typeof value !== "string") {
-    return [];
+  return dedupeTextEntries(
+    String(value || "")
+      .split(/[\n,]/)
+      .map((item) => item.trim())
+      .filter(Boolean),
+  );
+}
+
+function normalizeIngredients(value) {
+  if (Array.isArray(value)) {
+    return dedupeTextEntries(value);
   }
 
+  return parseIngredients(value);
+}
+
+function dedupeLinks(links) {
   const seen = new Set();
+  const uniqueLinks = [];
 
-  return value
-    .split(/[\n,]/)
-    .map((item) => normalizeIngredient(item))
-    .filter((item) => {
-      if (!item || seen.has(item.toLowerCase())) {
-        return false;
-      }
-      seen.add(item.toLowerCase());
-      return true;
-    })
-    .slice(0, 16);
-}
+  for (const link of links) {
+    const key = `${link.url}|${normalizeText(link.label)}`;
+    if (seen.has(key)) {
+      continue;
+    }
 
-function normalizeIngredient(value) {
-  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, 40) : "";
-}
-
-function parseVideoLinks(value) {
-  if (typeof value !== "string" || !value.trim()) {
-    return { links: [], invalid: [] };
+    seen.add(key);
+    uniqueLinks.push(link);
   }
 
-  const links = [];
-  const invalid = [];
+  return uniqueLinks;
+}
+
+function dedupeTextEntries(values) {
   const seen = new Set();
+  const uniqueValues = [];
 
-  value
-    .split(/\n+/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .forEach((item) => {
-      const normalized = normalizeUrl(item);
-      if (!normalized) {
-        invalid.push(item);
-        return;
-      }
-
-      const key = normalized.toLowerCase();
-      if (seen.has(key)) {
-        return;
-      }
-
-      seen.add(key);
-      links.push(normalized);
-    });
-
-  return { links, invalid };
-}
-
-function normalizeUrl(value) {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const raw = value.trim();
-  if (!raw) {
-    return null;
-  }
-
-  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-
-  try {
-    const url = new URL(candidate);
-    if (!["http:", "https:"].includes(url.protocol)) {
-      return null;
-    }
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
-
-function describeVideoLink(url) {
-  let parsed;
-
-  try {
-    parsed = new URL(url);
-  } catch {
-    return { providerLabel: "Video link", linkLabel: "Open recipe link", embedUrl: null };
-  }
-
-  const host = parsed.hostname.replace(/^www\./, "");
-
-  const youtubeId = getYouTubeId(parsed);
-  if (youtubeId) {
-    return {
-      providerLabel: "YouTube",
-      linkLabel: "YouTube",
-      embedUrl: `https://www.youtube.com/embed/${youtubeId}`,
-    };
-  }
-
-  const vimeoId = getVimeoId(parsed);
-  if (vimeoId) {
-    return {
-      providerLabel: "Vimeo",
-      linkLabel: "Vimeo",
-      embedUrl: `https://player.vimeo.com/video/${vimeoId}`,
-    };
-  }
-
-  if (host.includes("instagram.com")) {
-    return {
-      providerLabel: "Instagram",
-      linkLabel: "Instagram",
-      embedUrl: null,
-    };
-  }
-
-  if (host.includes("tiktok.com")) {
-    return {
-      providerLabel: "TikTok",
-      linkLabel: "TikTok",
-      embedUrl: null,
-    };
-  }
-
-  return {
-    providerLabel: host || "Video link",
-    linkLabel: host || "Open recipe link",
-    embedUrl: null,
-  };
-}
-
-function getYouTubeId(url) {
-  const host = url.hostname.replace(/^www\./, "");
-
-  if (host === "youtu.be") {
-    return cleanVideoId(url.pathname.slice(1));
-  }
-
-  if (host === "youtube.com" || host === "m.youtube.com") {
-    if (url.pathname === "/watch") {
-      return cleanVideoId(url.searchParams.get("v"));
+  for (const value of values) {
+    const normalizedValue = normalizeTitle(value, "");
+    if (!normalizedValue) {
+      continue;
     }
 
-    if (url.pathname.startsWith("/shorts/")) {
-      return cleanVideoId(url.pathname.split("/")[2]);
+    const key = normalizedValue.toLowerCase();
+    if (seen.has(key)) {
+      continue;
     }
 
-    if (url.pathname.startsWith("/embed/")) {
-      return cleanVideoId(url.pathname.split("/")[2]);
-    }
+    seen.add(key);
+    uniqueValues.push(normalizedValue);
   }
 
-  return null;
+  return uniqueValues;
 }
 
-function getVimeoId(url) {
-  const host = url.hostname.replace(/^www\./, "");
-  if (!host.includes("vimeo.com")) {
-    return null;
-  }
-
-  const match = url.pathname.match(/\/(\d+)/);
-  return match ? match[1] : null;
+function normalizeIsoDate(value) {
+  const parsedValue = new Date(value);
+  return Number.isNaN(parsedValue.valueOf()) ? null : parsedValue.toISOString();
 }
 
-function cleanVideoId(value) {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-}
-
-function buildShareUrl() {
-  const payload = {
-    version: 1,
-    plan: sanitizePlan(state.plan),
-    meals: sortMeals(sanitizeMeals(state.meals)),
-  };
-  const encoded = encodeSharePayload(payload);
-  const url = new URL(window.location.href);
-  url.hash = `share=${encoded}`;
-
-  return url.toString().length > 6000 ? null : url.toString();
-}
-
-function encodeSharePayload(payload) {
-  const json = JSON.stringify(payload);
-  const bytes = new TextEncoder().encode(json);
-  let binary = "";
-
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function readSharedPayloadFromLocation() {
-  return decodeSharedInput(window.location.href);
-}
-
-function decodeSharedInput(input) {
-  if (typeof input !== "string") {
-    return null;
-  }
-
-  const trimmed = input.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  if (trimmed.startsWith(SHARE_HASH_PREFIX)) {
-    return decodeShareToken(trimmed.slice(SHARE_HASH_PREFIX.length));
-  }
-
-  try {
-    const url = new URL(trimmed);
-    if (url.hash.startsWith(SHARE_HASH_PREFIX)) {
-      return decodeShareToken(url.hash.slice(SHARE_HASH_PREFIX.length));
-    }
-  } catch {}
-
-  return decodeShareToken(trimmed);
-}
-
-function decodeShareToken(token) {
-  if (typeof token !== "string" || !token.trim()) {
-    return null;
-  }
-
-  try {
-    const normalized = token.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-    const binary = atob(padded);
-    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-    const json = new TextDecoder().decode(bytes);
-    const parsed = JSON.parse(json);
-
-    return {
-      plan: sanitizePlan(parsed?.plan),
-      meals: sanitizeMeals(parsed?.meals),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function clearShareHash() {
-  const url = new URL(window.location.href);
-  url.hash = "";
-  window.history.replaceState({}, "", url.toString());
-}
-
-async function copyText(value) {
-  if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
-    return false;
-  }
-
-  try {
-    await navigator.clipboard.writeText(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function setShareFeedback(message, tone = "muted") {
-  dom.shareFeedback.textContent = message;
-  dom.shareFeedback.className = `helper-line ${tone}`;
-}
-
-function formatWeekRange(plan) {
-  const start = parseDateInput(plan.weekOf);
-  const end = addDays(start, plan.includeWeekend ? 6 : 4);
-
-  const startText = new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-  }).format(start);
-  const endText = new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-  }).format(end);
-
-  return `${startText} - ${endText} · ${plan.includeWeekend ? "Full week" : "Weekdays"}`;
-}
-
-function formatColumnDate(date) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-  }).format(date);
-}
-
-function formatDaySummary(meals) {
-  if (!meals.length) {
-    return "Open slot";
-  }
-
-  const prepTotal = meals
-    .map((meal) => meal.prepMinutes)
-    .filter((value) => Number.isFinite(value))
-    .reduce((sum, value) => sum + value, 0);
-
-  if (!prepTotal) {
-    return `${meals.length} meal${meals.length === 1 ? "" : "s"}`;
-  }
-
-  return `${meals.length} meal${meals.length === 1 ? "" : "s"} · ${prepTotal} min`;
-}
-
-function formatHouseholdSize(size) {
-  return `${size} ${size === 1 ? "person" : "people"}`;
-}
-
-function labelForMealType(value) {
-  return MEAL_TYPES.find((type) => type.key === value)?.label || "Dinner";
-}
-
-function parseDateInput(value) {
-  const [year, month, day] = String(value).split("-").map(Number);
-  const date = new Date(year, (month || 1) - 1, day || 1, 12);
-
-  if (!Number.isFinite(date.getTime())) {
-    return parseDateInput(getMondayInput());
-  }
-
-  return date;
-}
-
-function getMondayInput() {
-  return toDateInput(startOfWeek(new Date()));
-}
-
-function normalizeWeekOf(value) {
-  return toDateInput(startOfWeek(parseDateInput(value)));
-}
-
-function startOfWeek(date) {
-  const monday = new Date(date);
-  monday.setHours(12, 0, 0, 0);
-
-  const weekday = monday.getDay();
-  const delta = weekday === 0 ? -6 : 1 - weekday;
-  monday.setDate(monday.getDate() + delta);
-
-  return monday;
-}
-
-function addDays(date, amount) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + amount);
-  return next;
-}
-
-function toDateInput(date) {
-  const year = String(date.getFullYear());
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getDefaultMealDay() {
-  const today = new Date().getDay();
-  const activeDays = getPlanDays();
-
-  if (today >= 1 && today <= 6) {
-    const todayKey = ALL_DAYS[today - 1]?.key;
-    if (activeDays.some((day) => day.key === todayKey)) {
-      return todayKey;
-    }
-  }
-
-  if (today === 0 && activeDays.some((day) => day.key === "sunday")) {
-    return "sunday";
-  }
-
-  return activeDays[0]?.key || "monday";
+function uniqueIds(values) {
+  return [
+    ...new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function newId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (crypto.randomUUID) {
     return crypto.randomUUID();
   }
 
-  return `meal-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `recipe-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function shuffle(items) {
+  const copy = [...items];
+
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+  }
+
+  return copy;
+}
+
+function slugify(value) {
+  return (
+    normalizeText(value)
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "sufra-pool"
+  );
+}
+
+function pluralize(count) {
+  return count === 1 ? "" : "s";
 }
 
 function registerServiceWorker() {
@@ -1292,9 +1578,5 @@ function registerServiceWorker() {
     return;
   }
 
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("./service-worker.js?v=20260320-4", { updateViaCache: "none" })
-      .catch(() => {});
-  });
+  navigator.serviceWorker.register(SERVICE_WORKER_URL).catch(() => {});
 }
