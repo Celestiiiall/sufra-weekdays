@@ -1,9 +1,11 @@
 const APP_TITLE = "Sufra Recipes";
+const RECIPE_TITLE_LIMIT = 140;
+const RECIPE_NOTES_LIMIT = 2000;
 const STORAGE_KEY = "sufra-recipe-picker-v1";
 const LEGACY_STORAGE_KEY = "sufra-weekdays-v1";
 const THEME_STORAGE_KEY = "sufra-weekdays-theme";
 const SHARE_HASH_PREFIX = "#pool=";
-const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-7";
+const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-8";
 const THEME_COLORS = {
   light: "#efe3ce",
   dark: "#111827",
@@ -229,10 +231,10 @@ function migrateLegacyPlannerState(raw) {
     recipes: (Array.isArray(raw?.meals) ? raw.meals : []).map((meal) => ({
       id: typeof meal?.id === "string" && meal.id ? meal.id : newId(),
       mealType: normalizeMealType(meal?.mealType),
-      title: normalizeTitle(meal?.title, ""),
+      title: normalizeTitle(meal?.title, "", RECIPE_TITLE_LIMIT),
       prepMinutes: normalizePrepMinutes(meal?.prepMinutes),
       ingredients: normalizeIngredients(meal?.ingredients),
-      notes: normalizeParagraph(meal?.notes, 320),
+      notes: normalizeParagraph(meal?.notes, RECIPE_NOTES_LIMIT),
       links: normalizeImportedLinks(meal?.videoLinks),
       createdAt: normalizeIsoDate(meal?.createdAt) || nowIso,
       updatedAt: normalizeIsoDate(meal?.updatedAt) || nowIso,
@@ -257,7 +259,7 @@ function normalizeRecipe(raw) {
     return null;
   }
 
-  const title = normalizeTitle(raw.title, "");
+  const title = normalizeTitle(raw.title, "", RECIPE_TITLE_LIMIT);
   if (!title) {
     return null;
   }
@@ -270,7 +272,7 @@ function normalizeRecipe(raw) {
     title,
     prepMinutes: normalizePrepMinutes(raw.prepMinutes),
     ingredients: normalizeIngredients(raw.ingredients),
-    notes: normalizeParagraph(raw.notes, 320),
+    notes: normalizeParagraph(raw.notes, RECIPE_NOTES_LIMIT),
     links: normalizeImportedLinks(raw.links || raw.videoLinks),
     createdAt: normalizeIsoDate(raw.createdAt) || nowIso,
     updatedAt: normalizeIsoDate(raw.updatedAt) || nowIso,
@@ -364,7 +366,7 @@ function handleSubmitRecipe(event) {
 }
 
 function collectRecipeFromForm(currentRecipe = null) {
-  const title = normalizeTitle(dom.recipeTitle.value, "");
+  const title = normalizeTitle(dom.recipeTitle.value, "", RECIPE_TITLE_LIMIT);
   if (!title) {
     dom.recipeTitle.focus();
     return null;
@@ -384,7 +386,7 @@ function collectRecipeFromForm(currentRecipe = null) {
     title,
     prepMinutes: normalizePrepMinutes(dom.recipePrep.value),
     ingredients: parseIngredients(dom.recipeIngredients.value),
-    notes: normalizeParagraph(dom.recipeNotes.value, 320),
+    notes: normalizeParagraph(dom.recipeNotes.value, RECIPE_NOTES_LIMIT),
     links,
     createdAt: currentRecipe?.createdAt || nowIso,
     updatedAt: nowIso,
@@ -608,9 +610,11 @@ function editRecipe(recipeId) {
   dom.recipeLinks.value = recipe.links.map(formatLinkForTextarea).join("\n");
   dom.editingRecipeId.value = recipe.id;
   dom.composerHeading.textContent = "Edit Recipe";
-  dom.submitRecipe.textContent = "Save Changes";
+  dom.submitRecipe.textContent = "Update Recipe";
   dom.cancelEdit.classList.remove("hidden");
+  dom.recipeForm.scrollIntoView({ behavior: "smooth", block: "start" });
   dom.recipeTitle.focus();
+  setShareFeedback(`Editing ${recipe.title}. Update the fields, then save the recipe again.`, "muted");
 }
 
 function removeRecipe(recipeId) {
@@ -1373,11 +1377,11 @@ function normalizePrepMinutes(value) {
   return Math.min(600, parsedValue);
 }
 
-function normalizeTitle(value, fallback) {
+function normalizeTitle(value, fallback, limit = 80) {
   const normalizedValue = String(value || "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 80);
+    .slice(0, limit);
 
   return normalizedValue || fallback;
 }
@@ -1399,7 +1403,7 @@ function normalizeText(value) {
 function parseIngredients(value) {
   return dedupeTextEntries(
     String(value || "")
-      .split(/[\n,]/)
+      .split(/[\n,;•·]/)
       .map((item) => item.trim())
       .filter(Boolean),
   );

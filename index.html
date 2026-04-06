@@ -8,9 +8,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Sufra Recipes" />
     <title>Sufra Recipes</title>
-    <link rel="manifest" href="manifest.webmanifest?v=20260320-7" />
-    <link rel="icon" href="icon.svg?v=20260320-7" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="icon.svg?v=20260320-7" />
+    <link rel="manifest" href="manifest.webmanifest?v=20260320-8" />
+    <link rel="icon" href="icon.svg?v=20260320-8" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon.svg?v=20260320-8" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -29,7 +29,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260320-7" />
+    <link rel="stylesheet" href="styles.css?v=20260320-8" />
   </head>
   <body>
     <div class="page-glow glow-a"></div>
@@ -125,13 +125,7 @@
 
                 <label class="field-span">
                   Recipe Name
-                  <input
-                    id="recipe-title"
-                    type="text"
-                    maxlength="80"
-                    required
-                    placeholder="Chicken machboos"
-                  />
+                  <input id="recipe-title" type="text" maxlength="140" required placeholder="Chicken machboos" />
                 </label>
 
                 <label>
@@ -143,9 +137,8 @@
                   Ingredients
                   <textarea
                     id="recipe-ingredients"
-                    rows="3"
-                    maxlength="240"
-                    placeholder="rice, chicken, dried lime, onions, tomato, machboos spices"
+                    rows="5"
+                    placeholder="rice&#10;chicken&#10;dried lime&#10;onions&#10;tomato&#10;machboos spices"
                   ></textarea>
                 </label>
 
@@ -153,8 +146,7 @@
                   Notes
                   <textarea
                     id="recipe-notes"
-                    rows="3"
-                    maxlength="320"
+                    rows="5"
                     placeholder="Use the same stock for the rice and chicken, and keep extra daqoos ready for the next day."
                   ></textarea>
                 </label>
@@ -175,6 +167,10 @@
                 <button id="submit-recipe" type="submit">Save Recipe</button>
                 <button id="cancel-edit" class="ghost hidden" type="button">Cancel Edit</button>
               </div>
+
+              <p class="helper-line form-helper">
+                Ingredients can be added one per line or separated by commas or semicolons. To update a saved recipe, tap Edit Recipe on its card below.
+              </p>
             </form>
           </section>
         </div>
@@ -307,7 +303,7 @@
         <div class="embed-stack"></div>
         <div class="meal-actions">
           <button class="action-button toggle" type="button">Mark Used</button>
-          <button class="action-button edit" type="button">Edit</button>
+          <button class="action-button edit" type="button">Edit Recipe</button>
           <button class="action-button remove" type="button">Remove</button>
         </div>
       </article>
@@ -331,6 +327,6 @@
       </article>
     </template>
 
-    <script src="app.js?v=20260320-7"></script>
+    <script src="app.js?v=20260320-8"></script>
   </body>
 </html>

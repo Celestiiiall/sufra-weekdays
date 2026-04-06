@@ -7,6 +7,7 @@ It includes:
 - User-added recipe links for videos, blog posts, or other references
 - Automatic no-repeat rounds that restart after every saved recipe has been used once
 - Manual `Mark Used` and `Make Available` controls
+- Edit controls that reopen any saved recipe in the form
 - Search and filter controls for meal slot and round status
 - Shareable recipe links so someone else can import the same list
 - JSON export for larger libraries that do not fit comfortably in a URL
@@ -20,10 +21,12 @@ No dependencies are required.
 
 1. Open `index.html` in a browser.
 2. Add recipes and paste one link per line.
-3. Use `Pick Recipes` to draw from the saved list.
-4. The app will avoid repeats until every saved recipe has had a turn.
-5. After the round ends, the next pick starts a fresh round automatically.
-6. Use `Share Recipes` or `Export JSON` to move the list to another device.
+3. Add ingredients one per line, or separate them with commas or semicolons.
+4. Use `Edit Recipe` on any saved card to bring it back into the form.
+5. Use `Pick Recipes` to draw from the saved list.
+6. The app will avoid repeats until every saved recipe has had a turn.
+7. After the round ends, the next pick starts a fresh round automatically.
+8. Use `Share Recipes` or `Export JSON` to move the list to another device.
 
 ## Data storage
 
