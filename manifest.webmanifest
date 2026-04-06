@@ -1,7 +1,7 @@
 {
-  "name": "Sufra Pool",
-  "short_name": "Sufra Pool",
-  "description": "A static recipe-pool randomizer that saves recipes with links, picks without repeats, and shares full pools by link or JSON.",
+  "name": "Sufra Recipes",
+  "short_name": "Sufra Recipes",
+  "description": "A static recipe randomizer that keeps one saved recipe list, avoids repeats during a round, and starts over automatically after every recipe has been used once.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

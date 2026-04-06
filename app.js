@@ -1,8 +1,9 @@
+const APP_TITLE = "Sufra Recipes";
 const STORAGE_KEY = "sufra-recipe-picker-v1";
 const LEGACY_STORAGE_KEY = "sufra-weekdays-v1";
 const THEME_STORAGE_KEY = "sufra-weekdays-theme";
 const SHARE_HASH_PREFIX = "#pool=";
-const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-6";
+const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-7";
 const THEME_COLORS = {
   light: "#efe3ce",
   dark: "#111827",
@@ -24,9 +25,6 @@ const statusOrder = new Map([
 
 const dom = {
   themeToggle: document.getElementById("theme-toggle"),
-  collectionForm: document.getElementById("collection-form"),
-  collectionTitle: document.getElementById("collection-title"),
-  collectionNote: document.getElementById("collection-note"),
   sharePool: document.getElementById("share-pool"),
   importShared: document.getElementById("import-shared"),
   exportPool: document.getElementById("export-pool"),
@@ -50,10 +48,8 @@ const dom = {
   editingRecipeId: document.getElementById("editing-recipe-id"),
   submitRecipe: document.getElementById("submit-recipe"),
   cancelEdit: document.getElementById("cancel-edit"),
-  pickerTypeFilter: document.getElementById("picker-type-filter"),
   pickerCount: document.getElementById("picker-count"),
   pickRecipes: document.getElementById("pick-recipes"),
-  resetCycle: document.getElementById("reset-cycle"),
   pickerFeedback: document.getElementById("picker-feedback"),
   currentPicks: document.getElementById("current-picks"),
   searchQuery: document.getElementById("search-query"),
@@ -66,7 +62,6 @@ const dom = {
   boardTitle: document.getElementById("board-title"),
   boardCopy: document.getElementById("board-copy"),
   recipeBoard: document.getElementById("recipe-board"),
-  recipeColumnTemplate: document.getElementById("recipe-column-template"),
   recipeCardTemplate: document.getElementById("recipe-card-template"),
   currentPickTemplate: document.getElementById("current-pick-template"),
 };
@@ -78,20 +73,18 @@ init();
 
 function init() {
   applyTheme(loadThemePreference());
-  syncCollectionForm();
   syncFilterControls();
   syncPickerControls();
   resetRecipeForm();
   renderSharedNotice();
 
   dom.themeToggle.addEventListener("click", toggleTheme);
-  dom.collectionForm.addEventListener("submit", handleSaveCollection);
   dom.recipeForm.addEventListener("submit", handleSubmitRecipe);
   dom.cancelEdit.addEventListener("click", () => resetRecipeForm({ preserveType: true }));
   dom.sharePool.addEventListener("click", handleSharePool);
   dom.importShared.addEventListener("click", handleImportPrompt);
-  dom.exportPool.addEventListener("click", exportPoolAsJson);
-  dom.clearPool.addEventListener("click", clearPool);
+  dom.exportPool.addEventListener("click", exportRecipesAsJson);
+  dom.clearPool.addEventListener("click", clearRecipes);
   dom.importSharedLink.addEventListener("click", () => {
     if (pendingSharedPayload) {
       importSharedPayload(pendingSharedPayload);
@@ -117,19 +110,12 @@ function init() {
     render();
   });
 
-  dom.pickerTypeFilter.addEventListener("change", (event) => {
-    state.picker.typeFilter = normalizeMealTypeFilter(event.target.value);
-    saveState();
-    render();
-  });
-
   dom.pickerCount.addEventListener("change", (event) => {
     state.picker.pickCount = normalizePickCount(event.target.value);
     saveState();
   });
 
   dom.pickRecipes.addEventListener("click", pickRecipesWithoutRepeats);
-  dom.resetCycle.addEventListener("click", resetCycle);
   window.addEventListener("hashchange", handleHashChange);
 
   render();
@@ -139,8 +125,7 @@ function init() {
 function createDefaultState() {
   return {
     collection: {
-      title: "Sufra Pool",
-      note: "",
+      title: APP_TITLE,
     },
     recipes: [],
     cycle: {
@@ -148,7 +133,6 @@ function createDefaultState() {
       currentPickIds: [],
     },
     picker: {
-      typeFilter: "all",
       pickCount: 1,
     },
     filters: {
@@ -214,7 +198,6 @@ function normalizeState(raw) {
   return {
     collection: {
       title: normalizeTitle(baseState?.collection?.title, defaults.collection.title),
-      note: normalizeParagraph(baseState?.collection?.note, 220),
     },
     recipes,
     cycle: {
@@ -222,7 +205,6 @@ function normalizeState(raw) {
       currentPickIds,
     },
     picker: {
-      typeFilter: normalizeMealTypeFilter(baseState?.picker?.typeFilter),
       pickCount: normalizePickCount(baseState?.picker?.pickCount),
     },
     filters: {
@@ -242,8 +224,7 @@ function migrateLegacyPlannerState(raw) {
 
   return {
     collection: {
-      title: normalizeTitle(raw?.plan?.title, "Sufra Pool"),
-      note: normalizeParagraph(raw?.plan?.note, 220),
+      title: APP_TITLE,
     },
     recipes: (Array.isArray(raw?.meals) ? raw.meals : []).map((meal) => ({
       id: typeof meal?.id === "string" && meal.id ? meal.id : newId(),
@@ -261,7 +242,6 @@ function migrateLegacyPlannerState(raw) {
       currentPickIds: [],
     },
     picker: {
-      typeFilter: "all",
       pickCount: 1,
     },
     filters: {
@@ -355,15 +335,6 @@ function applyTheme(theme) {
   }
 }
 
-function handleSaveCollection(event) {
-  event.preventDefault();
-  state.collection.title = normalizeTitle(dom.collectionTitle.value, "Sufra Pool");
-  state.collection.note = normalizeParagraph(dom.collectionNote.value, 220);
-  saveState();
-  render();
-  setShareFeedback("Recipe pool saved locally.", "muted");
-}
-
 function handleSubmitRecipe(event) {
   event.preventDefault();
 
@@ -383,7 +354,7 @@ function handleSubmitRecipe(event) {
     setShareFeedback("Recipe updated.", "ok");
   } else {
     state.recipes.push(nextRecipe);
-    setShareFeedback("Recipe added to the pool.", "ok");
+    setShareFeedback("Recipe saved to your library.", "ok");
   }
 
   sanitizeCycle();
@@ -422,26 +393,26 @@ function collectRecipeFromForm(currentRecipe = null) {
 
 async function handleSharePool() {
   if (!state.recipes.length) {
-    setShareFeedback("Add at least one recipe before sharing the pool.", "warn");
+    setShareFeedback("Add at least one recipe before sharing.", "warn");
     return;
   }
 
   const shareUrl = buildShareUrl();
   if (!shareUrl) {
-    setShareFeedback("This pool is too large for a share link. Use Export JSON instead.", "warn");
+    setShareFeedback("This library is too large for a share link. Use Export JSON instead.", "warn");
     return;
   }
 
   const shareData = {
-    title: `${state.collection.title} - Sufra Pool`,
-    text: `${state.recipes.length} recipes ready for non-repeating picks`,
+    title: APP_TITLE,
+    text: `${state.recipes.length} saved recipes ready for automatic rounds`,
     url: shareUrl,
   };
 
   if (navigator.share) {
     try {
       await navigator.share(shareData);
-      setShareFeedback("Pool shared.", "ok");
+      setShareFeedback("Recipes shared.", "ok");
       return;
     } catch (error) {
       if (error?.name === "AbortError") {
@@ -456,7 +427,7 @@ async function handleSharePool() {
     return;
   }
 
-  window.prompt("Copy this recipe-pool share link.", shareUrl);
+  window.prompt("Copy this recipe-library share link.", shareUrl);
   setShareFeedback("Share link ready.", "ok");
 }
 
@@ -468,38 +439,33 @@ function handleImportPrompt() {
 
   const payload = decodeSharedInput(value);
   if (!payload) {
-    setShareFeedback("That shared pool could not be read.", "warn");
+    setShareFeedback("That shared recipe list could not be read.", "warn");
     return;
   }
 
   importSharedPayload(payload);
 }
 
-function exportPoolAsJson() {
+function exportRecipesAsJson() {
   if (!state.recipes.length) {
-    setShareFeedback("Add recipes before exporting the pool.", "warn");
+    setShareFeedback("Add recipes before exporting.", "warn");
     return;
   }
 
   const payload = buildExportPayload();
-  const filename = `${slugify(state.collection.title || "sufra-pool")}.json`;
+  const filename = `${slugify(APP_TITLE)}.json`;
   downloadTextFile(filename, `${JSON.stringify(payload, null, 2)}\n`, "application/json");
   setShareFeedback("JSON export downloaded.", "ok");
 }
 
-function clearPool() {
-  const hasContent =
-    state.recipes.length ||
-    state.cycle.usedRecipeIds.length ||
-    state.collection.title !== "Sufra Pool" ||
-    state.collection.note;
-
+function clearRecipes() {
+  const hasContent = state.recipes.length || state.cycle.usedRecipeIds.length;
   if (!hasContent) {
     return;
   }
 
   const shouldClear = window.confirm(
-    "Clear this recipe pool, current picks, and no-repeat history from this device?",
+    "Clear every saved recipe and round history from this device?",
   );
   if (!shouldClear) {
     return;
@@ -507,16 +473,15 @@ function clearPool() {
 
   state = createDefaultState();
   saveState();
-  syncCollectionForm();
   syncFilterControls();
   syncPickerControls();
   resetRecipeForm();
   dismissSharedNotice({ clearHash: false });
   setPickerFeedback(
-    "Random picks only come from recipes that have not already been used in the current cycle.",
+    "The app avoids repeats until the round is complete, then the next pick starts over automatically.",
     "muted",
   );
-  setShareFeedback("Recipe pool cleared.", "muted");
+  setShareFeedback("Recipe library cleared.", "muted");
   render();
 }
 
@@ -524,7 +489,7 @@ function importSharedPayload(payload) {
   const importedState = normalizeState(payload);
   const shouldReplace =
     !state.recipes.length ||
-    window.confirm("Importing will replace the current recipe pool on this device. Continue?");
+    window.confirm("Importing will replace the current recipe library on this device. Continue?");
 
   if (!shouldReplace) {
     return;
@@ -532,14 +497,13 @@ function importSharedPayload(payload) {
 
   state = importedState;
   saveState();
-  syncCollectionForm();
   syncFilterControls();
   syncPickerControls();
   resetRecipeForm();
   dismissSharedNotice({ clearHash: true });
-  setShareFeedback("Shared pool imported.", "ok");
+  setShareFeedback("Shared recipes imported.", "ok");
   setPickerFeedback(
-    "Random picks only come from recipes that have not already been used in the current cycle.",
+    "The app avoids repeats until the round is complete, then the next pick starts over automatically.",
     "muted",
   );
   render();
@@ -549,65 +513,60 @@ function pickRecipesWithoutRepeats() {
   sanitizeCycle();
 
   if (!state.recipes.length) {
-    setPickerFeedback("Add recipes first, then the randomizer can pick from the pool.", "warn");
+    setPickerFeedback("Add recipes first, then the randomizer can pick from your list.", "warn");
     return;
   }
 
-  const typeFilter = normalizeMealTypeFilter(state.picker.typeFilter);
   const requestedCount = normalizePickCount(state.picker.pickCount);
-  const eligibleRecipes = getEligibleRecipes(typeFilter);
+  let eligibleRecipes = getAvailableRecipes();
+  let startedNewRound = false;
 
   if (!eligibleRecipes.length) {
-    setPickerFeedback(
-      `No unused ${formatPickerScope(typeFilter)} remain in this cycle. Reset the cycle or return a recipe to the pool.`,
-      "warn",
-    );
-    render();
-    return;
+    state.cycle.usedRecipeIds = [];
+    state.cycle.currentPickIds = [];
+    eligibleRecipes = getAvailableRecipes();
+    startedNewRound = true;
   }
 
   const selectedRecipes = shuffle(eligibleRecipes).slice(0, Math.min(requestedCount, eligibleRecipes.length));
   const selectedIds = selectedRecipes.map((recipe) => recipe.id);
 
-  state.cycle.usedRecipeIds = uniqueIds([...state.cycle.usedRecipeIds, ...selectedIds]);
   state.cycle.currentPickIds = selectedIds;
+  state.cycle.usedRecipeIds = uniqueIds([...state.cycle.usedRecipeIds, ...selectedIds]);
 
   saveState();
   render();
 
+  const remainingRecipes = getAvailableRecipes().length;
+
+  if (startedNewRound) {
+    setPickerFeedback(
+      `Started a fresh round and picked ${selectedRecipes.length} recipe${pluralize(selectedRecipes.length)}.`,
+      "ok",
+    );
+    return;
+  }
+
   if (selectedRecipes.length < requestedCount) {
     setPickerFeedback(
-      `Picked ${selectedRecipes.length} recipe${pluralize(selectedRecipes.length)} because that is all that remains without repeating.`,
+      `Picked ${selectedRecipes.length} recipe${pluralize(selectedRecipes.length)} because that is all that remained this round. The next pick starts over automatically.`,
+      "ok",
+    );
+    return;
+  }
+
+  if (!remainingRecipes) {
+    setPickerFeedback(
+      `Picked ${selectedRecipes.length} recipe${pluralize(selectedRecipes.length)}. That completed the round, so the next pick will start over automatically.`,
       "ok",
     );
     return;
   }
 
   setPickerFeedback(
-    `Picked ${selectedRecipes.length} ${formatPickerScope(typeFilter)} without repeats.`,
+    `Picked ${selectedRecipes.length} recipe${pluralize(selectedRecipes.length)} without repeats.`,
     "ok",
   );
-}
-
-function resetCycle() {
-  const hasCycle = state.cycle.usedRecipeIds.length || state.cycle.currentPickIds.length;
-  if (!hasCycle) {
-    setPickerFeedback("The no-repeat cycle is already clear.", "muted");
-    return;
-  }
-
-  const shouldReset = window.confirm(
-    "Reset the no-repeat cycle so every recipe becomes available again?",
-  );
-  if (!shouldReset) {
-    return;
-  }
-
-  state.cycle.usedRecipeIds = [];
-  state.cycle.currentPickIds = [];
-  saveState();
-  render();
-  setPickerFeedback("No-repeat cycle reset. Every recipe is available again.", "ok");
 }
 
 function markRecipeUsed(recipeId) {
@@ -615,10 +574,19 @@ function markRecipeUsed(recipeId) {
   state.cycle.currentPickIds = state.cycle.currentPickIds.filter((id) => id !== recipeId);
   saveState();
   render();
-  setPickerFeedback("Recipe marked used and removed from the randomizer.", "ok");
+
+  if (!getAvailableRecipes().length) {
+    setPickerFeedback(
+      "Recipe marked used. That finished the round, and the next pick will start over automatically.",
+      "ok",
+    );
+    return;
+  }
+
+  setPickerFeedback("Recipe marked used for this round.", "ok");
 }
 
-function returnRecipeToPool(recipeId, message = "Recipe returned to the pool.") {
+function returnRecipeToPool(recipeId, message = "Recipe is available again.") {
   state.cycle.usedRecipeIds = state.cycle.usedRecipeIds.filter((id) => id !== recipeId);
   state.cycle.currentPickIds = state.cycle.currentPickIds.filter((id) => id !== recipeId);
   saveState();
@@ -651,7 +619,7 @@ function removeRecipe(recipeId) {
     return;
   }
 
-  const shouldRemove = window.confirm(`Remove "${recipe.title}" from the recipe pool?`);
+  const shouldRemove = window.confirm(`Remove "${recipe.title}" from your saved recipes?`);
   if (!shouldRemove) {
     return;
   }
@@ -666,7 +634,7 @@ function removeRecipe(recipeId) {
 
   saveState();
   render();
-  setShareFeedback("Recipe removed from the pool.", "muted");
+  setShareFeedback("Recipe removed.", "muted");
 }
 
 function resetRecipeForm({ preserveType = false } = {}) {
@@ -675,13 +643,8 @@ function resetRecipeForm({ preserveType = false } = {}) {
   dom.recipeType.value = nextType;
   dom.editingRecipeId.value = "";
   dom.composerHeading.textContent = "Add a Recipe";
-  dom.submitRecipe.textContent = "Add to Pool";
+  dom.submitRecipe.textContent = "Save Recipe";
   dom.cancelEdit.classList.add("hidden");
-}
-
-function syncCollectionForm() {
-  dom.collectionTitle.value = state.collection.title;
-  dom.collectionNote.value = state.collection.note;
 }
 
 function syncFilterControls() {
@@ -691,7 +654,6 @@ function syncFilterControls() {
 }
 
 function syncPickerControls() {
-  dom.pickerTypeFilter.value = state.picker.typeFilter;
   dom.pickerCount.value = String(state.picker.pickCount);
 }
 
@@ -711,20 +673,17 @@ function renderHero() {
   const usedRecipes = state.cycle.usedRecipeIds.length;
 
   dom.poolSummary.textContent = totalRecipes
-    ? `${totalRecipes} recipe${pluralize(totalRecipes)} in rotation`
-    : "No recipes in rotation yet";
-  dom.heroCollectionName.textContent = state.collection.title;
+    ? `${totalRecipes} saved recipe${pluralize(totalRecipes)}`
+    : "No saved recipes yet";
+  dom.heroCollectionName.textContent = "Permanent recipe list";
 
-  if (!totalRecipes && !state.collection.note) {
+  if (!totalRecipes) {
     dom.poolStatusDisplay.textContent =
-      "Add recipes with links and the picker will avoid repeats automatically.";
+      "Recipes stay saved until you remove them yourself, and rounds restart automatically.";
     return;
   }
 
-  const rotationSummary = `${availableRecipes} available now, ${usedRecipes} used in this cycle.`;
-  dom.poolStatusDisplay.textContent = state.collection.note
-    ? `${rotationSummary} ${state.collection.note}`
-    : rotationSummary;
+  dom.poolStatusDisplay.textContent = `${availableRecipes} ready this round, ${usedRecipes} already used. Nothing disappears after it gets picked.`;
 }
 
 function renderStats() {
@@ -745,7 +704,7 @@ function renderCurrentPicks() {
   if (!currentRecipes.length) {
     const emptyCopy = document.createElement("p");
     emptyCopy.className = "empty-copy";
-    emptyCopy.textContent = "No picks yet. Tap Pick Recipes to choose from the pool.";
+    emptyCopy.textContent = "No picks yet. Tap Pick Recipes to choose from the list.";
     dom.currentPicks.append(emptyCopy);
     return;
   }
@@ -769,7 +728,7 @@ function renderCurrentPicks() {
     renderEmbeds(embeds, recipe.links);
 
     returnButton.addEventListener("click", () => {
-      returnRecipeToPool(recipe.id, "Current pick returned to the pool.");
+      returnRecipeToPool(recipe.id, "Recipe returned to the current round.");
     });
 
     dom.currentPicks.append(card);
@@ -777,14 +736,12 @@ function renderCurrentPicks() {
 }
 
 function renderBoardHeading() {
-  const filterLabel = getMealTypeLabel(state.filters.type);
   const visibleCount = getVisibleRecipes().length;
-
-  dom.boardTitle.textContent = state.filters.type === "all" ? "Pool by Meal Slot" : `${filterLabel} Pool`;
+  dom.boardTitle.textContent = state.filters.type === "all" ? "All Saved Recipes" : `${getMealTypeLabel(state.filters.type)} Recipes`;
 
   if (!state.recipes.length) {
     dom.boardCopy.textContent =
-      "Start by adding recipes. The randomizer will keep them out of rotation after each pick.";
+      "Start by adding recipes. The app keeps them saved and starts a fresh round automatically after every recipe has had a turn.";
     return;
   }
 
@@ -794,41 +751,30 @@ function renderBoardHeading() {
   }
 
   dom.boardCopy.textContent =
-    `${visibleCount} recipe${pluralize(visibleCount)} shown. Current picks count as used until you return them or reset the cycle.`;
+    `${visibleCount} recipe${pluralize(visibleCount)} shown. Meal slot tags are optional organization only; picks come from one big saved list.`;
 }
 
 function renderBoard() {
   dom.recipeBoard.replaceChildren();
-  const typesToRender =
-    state.filters.type === "all"
-      ? MEAL_TYPES
-      : MEAL_TYPES.filter((type) => type.key === state.filters.type);
+  const recipes = sortRecipesForDisplay(getVisibleRecipes());
 
-  for (const type of typesToRender) {
-    const recipes = sortRecipesForDisplay(getVisibleRecipesByType(type.key));
-    const availableCount = recipes.filter((recipe) => getRecipeStatus(recipe) === "available").length;
-    const fragment = dom.recipeColumnTemplate.content.cloneNode(true);
-    const column = fragment.querySelector(".recipe-column");
-    const slot = fragment.querySelector(".column-slot");
-    const title = fragment.querySelector(".column-title");
-    const summary = fragment.querySelector(".column-summary");
-    const recipeList = fragment.querySelector(".column-recipes");
-    const emptyCopy = fragment.querySelector(".column-empty");
+  if (!recipes.length) {
+    const emptyState = document.createElement("article");
+    emptyState.className = "panel day-column recipe-board-empty";
 
-    slot.textContent = "Meal slot";
-    title.textContent = type.label;
-    summary.textContent = recipes.length
-      ? `${recipes.length} recipe${pluralize(recipes.length)} · ${availableCount} available`
-      : "No matching recipes";
+    const message = document.createElement("p");
+    message.className = "empty-copy";
+    message.textContent = state.recipes.length
+      ? "No recipes match the current filters."
+      : "No recipes saved yet. Add your first recipe to start the list.";
 
-    if (recipes.length) {
-      emptyCopy.classList.add("hidden");
-      for (const recipe of recipes) {
-        recipeList.append(renderRecipeCard(recipe));
-      }
-    }
+    emptyState.append(message);
+    dom.recipeBoard.append(emptyState);
+    return;
+  }
 
-    dom.recipeBoard.append(column);
+  for (const recipe of recipes) {
+    dom.recipeBoard.append(renderRecipeCard(recipe));
   }
 }
 
@@ -865,7 +811,7 @@ function renderRecipeCard(recipe) {
     toggleButton.classList.remove("is-return");
     toggleButton.addEventListener("click", () => markRecipeUsed(recipe.id));
   } else {
-    toggleButton.textContent = "Return to Pool";
+    toggleButton.textContent = "Make Available";
     toggleButton.classList.add("is-return");
     toggleButton.addEventListener("click", () => returnRecipeToPool(recipe.id));
   }
@@ -955,22 +901,8 @@ function getVisibleRecipes() {
   return state.recipes.filter((recipe) => matchesFilters(recipe));
 }
 
-function getVisibleRecipesByType(mealType) {
-  return state.recipes.filter((recipe) => recipe.mealType === mealType && matchesFilters(recipe));
-}
-
-function getAvailableRecipes(typeFilter = "all") {
-  return state.recipes.filter((recipe) => {
-    if (typeFilter !== "all" && recipe.mealType !== typeFilter) {
-      return false;
-    }
-
-    return getRecipeStatus(recipe) === "available";
-  });
-}
-
-function getEligibleRecipes(typeFilter = "all") {
-  return getAvailableRecipes(typeFilter);
+function getAvailableRecipes() {
+  return state.recipes.filter((recipe) => getRecipeStatus(recipe) === "available");
 }
 
 function matchesFilters(recipe) {
@@ -1084,9 +1016,11 @@ function buildShareUrl() {
 
 function buildExportPayload() {
   return {
-    app: "sufra-pool",
-    version: 1,
-    collection: state.collection,
+    app: "sufra-recipes",
+    version: 2,
+    collection: {
+      title: APP_TITLE,
+    },
     recipes: state.recipes,
     cycle: state.cycle,
     picker: state.picker,
@@ -1185,9 +1119,8 @@ function renderSharedNotice() {
     return;
   }
 
-  const title = pendingSharedPayload.collection.title;
   const count = pendingSharedPayload.recipes.length;
-  dom.sharedBannerText.textContent = `${title} with ${count} recipe${pluralize(count)} is ready to import.`;
+  dom.sharedBannerText.textContent = `${count} shared recipe${pluralize(count)} are ready to import.`;
   dom.sharedBanner.classList.remove("hidden");
 }
 
@@ -1384,26 +1317,18 @@ function getRecipeSummary(recipe) {
 
 function getStatusLabel(status) {
   if (status === "current") {
-    return "Current Pick";
+    return "Picked Now";
   }
 
   if (status === "used") {
-    return "Used";
+    return "Used This Round";
   }
 
-  return "Available";
+  return "Ready";
 }
 
 function formatPrepMinutes(value) {
   return value ? `${value} min` : "Prep flexible";
-}
-
-function formatPickerScope(filterValue) {
-  if (filterValue === "all") {
-    return "recipes";
-  }
-
-  return `${getMealTypeLabel(filterValue).toLowerCase()} recipes`;
 }
 
 function getMealTypeLabel(value) {
@@ -1565,7 +1490,7 @@ function slugify(value) {
   return (
     normalizeText(value)
       .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "sufra-pool"
+      .replace(/^-+|-+$/g, "") || "sufra-recipes"
   );
 }
 

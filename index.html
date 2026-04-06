@@ -6,11 +6,11 @@
     <meta name="theme-color" content="#efe3ce" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Sufra Pool" />
-    <title>Sufra Pool</title>
-    <link rel="manifest" href="manifest.webmanifest?v=20260320-6" />
-    <link rel="icon" href="icon.svg?v=20260320-6" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="icon.svg?v=20260320-6" />
+    <meta name="apple-mobile-web-app-title" content="Sufra Recipes" />
+    <title>Sufra Recipes</title>
+    <link rel="manifest" href="manifest.webmanifest?v=20260320-7" />
+    <link rel="icon" href="icon.svg?v=20260320-7" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon.svg?v=20260320-7" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -29,7 +29,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260320-6" />
+    <link rel="stylesheet" href="styles.css?v=20260320-7" />
   </head>
   <body>
     <div class="page-glow glow-a"></div>
@@ -40,35 +40,35 @@
       <header class="panel hero">
         <div class="hero-copy">
           <div class="hero-topline">
-            <p class="eyebrow">Sufra Pool</p>
+            <p class="eyebrow">Sufra Recipes</p>
             <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false">
               Night Mode
             </button>
           </div>
-          <h1>Build a recipe pool and let the app choose what is next.</h1>
+          <h1>Save recipes once and let the app choose what is next.</h1>
           <p class="hero-text">
-            Add your recipes with links, randomize from that pool, and keep each selection out of
-            rotation until the rest of the list has had a turn.
+            Keep everything in one big recipe list, randomize without repeats, and let the app start
+            a fresh round automatically after every saved recipe has been used once.
           </p>
         </div>
 
         <div class="hero-summary">
-          <p class="summary-label">Pool snapshot</p>
-          <strong id="pool-summary">0 recipes in rotation</strong>
-          <p id="hero-collection-name" class="hero-plan-name">Sufra Pool</p>
+          <p class="summary-label">Recipe snapshot</p>
+          <strong id="pool-summary">0 saved recipes</strong>
+          <p id="hero-collection-name" class="hero-plan-name">Permanent recipe list</p>
           <p id="pool-status-display" class="plan-focus-display">
-            Add recipes with links and the picker will avoid repeats automatically.
+            Recipes stay saved until you remove them yourself, and rounds restart automatically.
           </p>
         </div>
       </header>
 
       <section id="shared-banner" class="panel share-banner hidden" aria-live="polite">
         <div class="share-banner-copy">
-          <p class="section-kicker">Shared pool detected</p>
+          <p class="section-kicker">Shared recipes detected</p>
           <p id="shared-banner-text" class="share-banner-text"></p>
         </div>
         <div class="share-actions">
-          <button id="import-shared-link" type="button">Import Shared Pool</button>
+          <button id="import-shared-link" type="button">Import Shared Recipes</button>
           <button id="dismiss-shared-link" class="ghost" type="button">Dismiss</button>
         </div>
       </section>
@@ -78,42 +78,25 @@
           <section class="panel">
             <div class="section-head">
               <div>
-                <p class="section-kicker">Collection setup</p>
-                <h2>Recipe Pool</h2>
+                <p class="section-kicker">Recipe actions</p>
+                <h2>Saved Recipes</h2>
               </div>
               <p class="section-copy">
-                Name the pool, add a short note about the rotation, then share or export it when
-                you want the same recipe list on another device.
+                Everything lives in one recipe library. Share it, import it, export it, or clear it
+                only when you really want to start over.
               </p>
             </div>
 
-            <form id="collection-form" class="setup-form">
-              <label>
-                Pool Name
-                <input id="collection-title" type="text" maxlength="60" placeholder="Family rotation" />
-              </label>
-              <label class="field-span">
-                Rotation Notes
-                <textarea
-                  id="collection-note"
-                  rows="3"
-                  maxlength="220"
-                  placeholder="Keep quick dinners in rotation, save guest-friendly dishes for later, and let the app handle the no-repeat cycle."
-                ></textarea>
-              </label>
+            <div class="button-row">
+              <button id="share-pool" type="button">Share Recipes</button>
+              <button id="import-shared" class="ghost" type="button">Import Shared Link</button>
+              <button id="export-pool" class="ghost" type="button">Export JSON</button>
+              <button id="clear-pool" class="ghost danger" type="button">Clear Recipes</button>
+            </div>
 
-              <div class="button-row">
-                <button id="save-collection" type="submit">Save Pool</button>
-                <button id="share-pool" type="button">Share Pool</button>
-                <button id="import-shared" class="ghost" type="button">Import Shared Link</button>
-                <button id="export-pool" class="ghost" type="button">Export JSON</button>
-                <button id="clear-pool" class="ghost danger" type="button">Clear Pool</button>
-              </div>
-
-              <p id="share-feedback" class="helper-line">
-                Share by link, native share sheet, or JSON export for larger recipe pools.
-              </p>
-            </form>
+            <p id="share-feedback" class="helper-line">
+              Share by link, native share sheet, or JSON export for larger recipe libraries.
+            </p>
           </section>
 
           <section class="panel">
@@ -123,8 +106,8 @@
                 <h2 id="composer-heading">Add a Recipe</h2>
               </div>
               <p class="section-copy">
-                Every recipe stays in the pool until it gets picked. Links can be videos, blogs, or
-                any source you want to open quickly later.
+                Recipes stay saved until you remove them. Add links, notes, and ingredients so the
+                random pick is always ready to use.
               </p>
             </div>
 
@@ -189,7 +172,7 @@
               <input id="editing-recipe-id" type="hidden" />
 
               <div class="button-row">
-                <button id="submit-recipe" type="submit">Add to Pool</button>
+                <button id="submit-recipe" type="submit">Save Recipe</button>
                 <button id="cancel-edit" class="ghost hidden" type="button">Cancel Edit</button>
               </div>
             </form>
@@ -203,11 +186,11 @@
               <strong id="stat-recipes">0</strong>
             </article>
             <article class="panel stat-card">
-              <p>Available Now</p>
+              <p>Ready This Round</p>
               <strong id="stat-available">0</strong>
             </article>
             <article class="panel stat-card">
-              <p>Used This Cycle</p>
+              <p>Used This Round</p>
               <strong id="stat-used">0</strong>
             </article>
             <article class="panel stat-card">
@@ -220,21 +203,11 @@
             <div class="section-head compact">
               <div>
                 <p class="section-kicker">Randomizer</p>
-                <h2>Pick Without Repeats</h2>
+                <h2>Pick Recipes</h2>
               </div>
             </div>
 
             <div class="filter-grid">
-              <label>
-                Meal Slot
-                <select id="picker-type-filter">
-                  <option value="all">Any slot</option>
-                  <option value="breakfast">Breakfast</option>
-                  <option value="lunch">Lunch</option>
-                  <option value="dinner">Dinner</option>
-                  <option value="snack">Snack</option>
-                </select>
-              </label>
               <label>
                 How Many Picks
                 <select id="picker-count">
@@ -246,13 +219,12 @@
               </label>
               <div class="button-row">
                 <button id="pick-recipes" type="button">Pick Recipes</button>
-                <button id="reset-cycle" class="ghost" type="button">Reset No-Repeat Cycle</button>
               </div>
               <p id="picker-feedback" class="helper-line">
-                Random picks only come from recipes that have not already been used in the current cycle.
+                The app avoids repeats until the round is complete, then the next pick starts over automatically.
               </p>
               <div id="current-picks" class="current-picks">
-                <p class="empty-copy">No picks yet. Tap Pick Recipes to choose from the pool.</p>
+                <p class="empty-copy">No picks yet. Tap Pick Recipes to choose from the list.</p>
               </div>
             </div>
           </section>
@@ -261,7 +233,7 @@
             <div class="section-head compact">
               <div>
                 <p class="section-kicker">Filter view</p>
-                <h2>Browse the Pool</h2>
+                <h2>Browse Recipes</h2>
               </div>
             </div>
 
@@ -281,11 +253,11 @@
                 </select>
               </label>
               <label>
-                Cycle State
+                Round Status
                 <select id="filter-availability">
                   <option value="all">All recipes</option>
-                  <option value="available">Available only</option>
-                  <option value="used">Used only</option>
+                  <option value="available">Ready this round</option>
+                  <option value="used">Used this round</option>
                 </select>
               </label>
             </div>
@@ -293,13 +265,13 @@
 
           <section class="panel support-panel">
             <p class="section-kicker">How it works</p>
-            <h2>Rotation Rules</h2>
+            <h2>Automatic Rounds</h2>
             <p>
-              Once a recipe is picked, it stays out of the randomizer until you reset the cycle or
-              return it to the pool manually.
+              Recipes never disappear after they are picked. Once the last unused recipe has had a
+              turn, the next pick starts a new round automatically.
             </p>
             <ul class="support-list">
-              <li>You can share the whole recipe pool by link or JSON.</li>
+              <li>Recipes stay saved until you remove them yourself.</li>
               <li>YouTube and Vimeo links preview inline.</li>
               <li>Other links still save as quick-open references.</li>
             </ul>
@@ -310,30 +282,16 @@
       <section class="board-heading">
         <div>
           <p class="section-kicker">Recipe library</p>
-          <h2 id="board-title">Pool by Meal Slot</h2>
+          <h2 id="board-title">All Saved Recipes</h2>
         </div>
         <p id="board-copy" class="section-copy board-copy">
-          Recipes are grouped by slot. Used recipes stay out of random picks until the no-repeat
-          cycle is reset.
+          Every saved recipe stays in the list. Random picks use the whole library and start a new
+          round automatically after the last unused recipe is picked.
         </p>
       </section>
 
       <section id="recipe-board" class="weekday-board" aria-live="polite"></section>
     </main>
-
-    <template id="recipe-column-template">
-      <section class="panel day-column recipe-column">
-        <header class="day-header recipe-column-header">
-          <div>
-            <p class="day-name column-slot"></p>
-            <h3 class="day-date column-title"></h3>
-          </div>
-          <p class="day-summary column-summary"></p>
-        </header>
-        <div class="day-meals column-recipes"></div>
-        <p class="day-empty column-empty">No recipes saved for this slot yet.</p>
-      </section>
-    </template>
 
     <template id="recipe-card-template">
       <article class="meal-card recipe-card">
@@ -368,11 +326,11 @@
         <div class="video-link-row current-pick-links"></div>
         <div class="embed-stack current-pick-embeds"></div>
         <div class="meal-actions">
-          <button class="action-button return" type="button">Return to Pool</button>
+          <button class="action-button return" type="button">Make Available</button>
         </div>
       </article>
     </template>
 
-    <script src="app.js?v=20260320-6"></script>
+    <script src="app.js?v=20260320-7"></script>
   </body>
 </html>

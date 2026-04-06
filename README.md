@@ -1,15 +1,15 @@
-# Sufra Pool
+# Sufra Recipes
 
-A static recipe-pool randomizer built as a lightweight web app.
+A static recipe randomizer built as a lightweight web app.
 
 It includes:
-- A saved recipe library grouped by breakfast, lunch, dinner, and snack
+- One permanent saved recipe list
 - User-added recipe links for videos, blog posts, or other references
-- A non-repeating randomizer that keeps picked recipes out of rotation until the cycle is reset
-- Manual `Mark Used` and `Return to Pool` controls
-- Search and filter controls for slot and cycle status
-- Shareable pool links so someone else can import the same collection
-- JSON export for larger pools that do not fit comfortably in a URL
+- Automatic no-repeat rounds that restart after every saved recipe has been used once
+- Manual `Mark Used` and `Make Available` controls
+- Search and filter controls for meal slot and round status
+- Shareable recipe links so someone else can import the same list
+- JSON export for larger libraries that do not fit comfortably in a URL
 - Inline previews for supported sources like YouTube and Vimeo
 - Local `localStorage` persistence
 - Installable PWA support
@@ -19,17 +19,17 @@ It includes:
 No dependencies are required.
 
 1. Open `index.html` in a browser.
-2. Save a pool name and optional rotation note.
-3. Add recipes and paste one link per line.
-4. Use `Pick Recipes` to draw from the pool without repeats.
-5. Use `Reset No-Repeat Cycle` when you want every recipe available again.
-6. Use `Share Pool` or `Export JSON` to move the collection to another device.
+2. Add recipes and paste one link per line.
+3. Use `Pick Recipes` to draw from the saved list.
+4. The app will avoid repeats until every saved recipe has had a turn.
+5. After the round ends, the next pick starts a fresh round automatically.
+6. Use `Share Recipes` or `Export JSON` to move the list to another device.
 
 ## Data storage
 
-Pool data is stored in browser `localStorage` under the key `sufra-recipe-picker-v1`.
+Recipe data is stored in browser `localStorage` under the key `sufra-recipe-picker-v1`.
 
-If an older `sufra-weekdays-v1` planner exists in the same browser, the app will migrate those saved meals into the new recipe pool format.
+If an older `sufra-weekdays-v1` planner exists in the same browser, the app will migrate those saved meals into the new recipe format.
 
 ## Publish to GitHub Pages
 
@@ -45,9 +45,9 @@ Your Pages URL will be:
 
 ## Sharing
 
-- `Share Pool` creates a link containing the current collection, recipe list, and no-repeat state.
-- Opening that link on another device shows an import prompt for the shared pool.
-- If the pool grows too large for a URL, use `Export JSON` as the fallback.
+- `Share Recipes` creates a link containing the current saved list and round state.
+- Opening that link on another device shows an import prompt for the shared recipes.
+- If the library grows too large for a URL, use `Export JSON` as the fallback.
 
 ## Notes on recipe links
 
