@@ -1,12 +1,12 @@
-const CACHE_NAME = "sufra-recipes-v8";
+const CACHE_NAME = "sufra-recipes-v9";
 const APP_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=20260320-8",
-  "./app.js?v=20260320-8",
-  "./manifest.webmanifest?v=20260320-8",
-  "./icon.svg?v=20260320-8",
-  "./service-worker.js?v=20260320-8",
+  "./styles.css?v=20260320-9",
+  "./app.js?v=20260320-9",
+  "./manifest.webmanifest?v=20260320-9",
+  "./icon.svg?v=20260320-9",
+  "./service-worker.js?v=20260320-9",
 ];
 
 self.addEventListener("install", (event) => {

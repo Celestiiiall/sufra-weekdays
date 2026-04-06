@@ -1,11 +1,13 @@
 const APP_TITLE = "Sufra Recipes";
 const RECIPE_TITLE_LIMIT = 140;
 const RECIPE_NOTES_LIMIT = 2000;
+const RECIPE_IMAGE_MAX_DIMENSION = 960;
+const RECIPE_IMAGE_OUTPUT_QUALITY = 0.82;
 const STORAGE_KEY = "sufra-recipe-picker-v1";
 const LEGACY_STORAGE_KEY = "sufra-weekdays-v1";
 const THEME_STORAGE_KEY = "sufra-weekdays-theme";
 const SHARE_HASH_PREFIX = "#pool=";
-const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-8";
+const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-9";
 const THEME_COLORS = {
   light: "#efe3ce",
   dark: "#111827",
@@ -44,6 +46,13 @@ const dom = {
   recipeType: document.getElementById("recipe-type"),
   recipeTitle: document.getElementById("recipe-title"),
   recipePrep: document.getElementById("recipe-prep"),
+  recipeImageFile: document.getElementById("recipe-image-file"),
+  recipeImageCurrent: document.getElementById("recipe-image-current"),
+  recipeImageRemoved: document.getElementById("recipe-image-removed"),
+  recipeImagePreview: document.getElementById("recipe-image-preview"),
+  recipeImagePreviewImg: document.getElementById("recipe-image-preview-img"),
+  recipeImagePreviewStatus: document.getElementById("recipe-image-preview-status"),
+  clearRecipeImage: document.getElementById("clear-recipe-image"),
   recipeIngredients: document.getElementById("recipe-ingredients"),
   recipeNotes: document.getElementById("recipe-notes"),
   recipeLinks: document.getElementById("recipe-links"),
@@ -70,6 +79,7 @@ const dom = {
 
 let state = loadState();
 let pendingSharedPayload = readSharedPayloadFromLocation();
+let recipeImagePreviewUrl = "";
 
 init();
 
@@ -83,6 +93,8 @@ function init() {
   dom.themeToggle.addEventListener("click", toggleTheme);
   dom.recipeForm.addEventListener("submit", handleSubmitRecipe);
   dom.cancelEdit.addEventListener("click", () => resetRecipeForm({ preserveType: true }));
+  dom.recipeImageFile.addEventListener("change", handleRecipeImageSelection);
+  dom.clearRecipeImage.addEventListener("click", clearRecipeImage);
   dom.sharePool.addEventListener("click", handleSharePool);
   dom.importShared.addEventListener("click", handleImportPrompt);
   dom.exportPool.addEventListener("click", exportRecipesAsJson);
@@ -233,6 +245,7 @@ function migrateLegacyPlannerState(raw) {
       mealType: normalizeMealType(meal?.mealType),
       title: normalizeTitle(meal?.title, "", RECIPE_TITLE_LIMIT),
       prepMinutes: normalizePrepMinutes(meal?.prepMinutes),
+      image: "",
       ingredients: normalizeIngredients(meal?.ingredients),
       notes: normalizeParagraph(meal?.notes, RECIPE_NOTES_LIMIT),
       links: normalizeImportedLinks(meal?.videoLinks),
@@ -271,6 +284,7 @@ function normalizeRecipe(raw) {
     mealType: normalizeMealType(raw.mealType || raw.type),
     title,
     prepMinutes: normalizePrepMinutes(raw.prepMinutes),
+    image: normalizeImageSource(raw.image),
     ingredients: normalizeIngredients(raw.ingredients),
     notes: normalizeParagraph(raw.notes, RECIPE_NOTES_LIMIT),
     links: normalizeImportedLinks(raw.links || raw.videoLinks),
@@ -337,12 +351,12 @@ function applyTheme(theme) {
   }
 }
 
-function handleSubmitRecipe(event) {
+async function handleSubmitRecipe(event) {
   event.preventDefault();
 
   const editingId = dom.editingRecipeId.value || null;
   const currentRecipe = editingId ? state.recipes.find((recipe) => recipe.id === editingId) : null;
-  const nextRecipe = collectRecipeFromForm(currentRecipe);
+  const nextRecipe = await collectRecipeFromForm(currentRecipe);
 
   if (!nextRecipe) {
     return;
@@ -365,7 +379,7 @@ function handleSubmitRecipe(event) {
   resetRecipeForm({ preserveType: true });
 }
 
-function collectRecipeFromForm(currentRecipe = null) {
+async function collectRecipeFromForm(currentRecipe = null) {
   const title = normalizeTitle(dom.recipeTitle.value, "", RECIPE_TITLE_LIMIT);
   if (!title) {
     dom.recipeTitle.focus();
@@ -378,6 +392,12 @@ function collectRecipeFromForm(currentRecipe = null) {
     return null;
   }
 
+  const image = await collectRecipeImage(currentRecipe);
+  if (image === null) {
+    window.alert("That image could not be added. Try a smaller image or another file.");
+    return null;
+  }
+
   const nowIso = new Date().toISOString();
 
   return {
@@ -385,6 +405,7 @@ function collectRecipeFromForm(currentRecipe = null) {
     mealType: normalizeMealType(dom.recipeType.value),
     title,
     prepMinutes: normalizePrepMinutes(dom.recipePrep.value),
+    image,
     ingredients: parseIngredients(dom.recipeIngredients.value),
     notes: normalizeParagraph(dom.recipeNotes.value, RECIPE_NOTES_LIMIT),
     links,
@@ -401,7 +422,7 @@ async function handleSharePool() {
 
   const shareUrl = buildShareUrl();
   if (!shareUrl) {
-    setShareFeedback("This library is too large for a share link. Use Export JSON instead.", "warn");
+    setShareFeedback("This library is too large for a share link. Use Export JSON instead, especially if recipes include images.", "warn");
     return;
   }
 
@@ -605,6 +626,9 @@ function editRecipe(recipeId) {
   dom.recipeType.value = recipe.mealType;
   dom.recipeTitle.value = recipe.title;
   dom.recipePrep.value = recipe.prepMinutes ?? "";
+  dom.recipeImageCurrent.value = recipe.image || "";
+  dom.recipeImageRemoved.value = "false";
+  dom.recipeImageFile.value = "";
   dom.recipeIngredients.value = recipe.ingredients.join(", ");
   dom.recipeNotes.value = recipe.notes;
   dom.recipeLinks.value = recipe.links.map(formatLinkForTextarea).join("\n");
@@ -612,6 +636,7 @@ function editRecipe(recipeId) {
   dom.composerHeading.textContent = "Edit Recipe";
   dom.submitRecipe.textContent = "Update Recipe";
   dom.cancelEdit.classList.remove("hidden");
+  renderRecipeImagePreview();
   dom.recipeForm.scrollIntoView({ behavior: "smooth", block: "start" });
   dom.recipeTitle.focus();
   setShareFeedback(`Editing ${recipe.title}. Update the fields, then save the recipe again.`, "muted");
@@ -645,6 +670,7 @@ function resetRecipeForm({ preserveType = false } = {}) {
   const nextType = preserveType ? normalizeMealType(dom.recipeType.value) : "dinner";
   dom.recipeForm.reset();
   dom.recipeType.value = nextType;
+  resetRecipeImageState();
   dom.editingRecipeId.value = "";
   dom.composerHeading.textContent = "Add a Recipe";
   dom.submitRecipe.textContent = "Save Recipe";
@@ -716,6 +742,8 @@ function renderCurrentPicks() {
   for (const recipe of currentRecipes) {
     const fragment = dom.currentPickTemplate.content.cloneNode(true);
     const card = fragment.querySelector(".current-pick-card");
+    const imageShell = fragment.querySelector(".current-pick-image-shell");
+    const image = fragment.querySelector(".current-pick-image");
     const slot = fragment.querySelector(".current-pick-slot");
     const title = fragment.querySelector(".current-pick-title");
     const prep = fragment.querySelector(".current-pick-prep");
@@ -724,6 +752,7 @@ function renderCurrentPicks() {
     const embeds = fragment.querySelector(".current-pick-embeds");
     const returnButton = fragment.querySelector(".return");
 
+    renderRecipeImage(imageShell, image, recipe.image, recipe.title);
     slot.textContent = getMealTypeLabel(recipe.mealType);
     title.textContent = recipe.title;
     prep.textContent = formatPrepMinutes(recipe.prepMinutes);
@@ -785,6 +814,8 @@ function renderBoard() {
 function renderRecipeCard(recipe) {
   const fragment = dom.recipeCardTemplate.content.cloneNode(true);
   const card = fragment.querySelector(".recipe-card");
+  const imageShell = fragment.querySelector(".recipe-image-shell");
+  const image = fragment.querySelector(".recipe-image");
   const typePill = fragment.querySelector(".recipe-type-pill");
   const statusPill = fragment.querySelector(".recipe-status-pill");
   const prepPill = fragment.querySelector(".recipe-prep");
@@ -799,6 +830,7 @@ function renderRecipeCard(recipe) {
   const status = getRecipeStatus(recipe);
 
   card.classList.add(`is-${status}`);
+  renderRecipeImage(imageShell, image, recipe.image, recipe.title);
   typePill.textContent = getMealTypeLabel(recipe.mealType);
   prepPill.textContent = formatPrepMinutes(recipe.prepMinutes);
   title.textContent = recipe.title;
@@ -1161,6 +1193,178 @@ function downloadTextFile(filename, contents, mimeType) {
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function handleRecipeImageSelection() {
+  dom.recipeImageRemoved.value = "false";
+  renderRecipeImagePreview();
+}
+
+function clearRecipeImage() {
+  const hasSelectedFile = Boolean(dom.recipeImageFile.files?.length);
+  dom.recipeImageFile.value = "";
+
+  if (hasSelectedFile && dom.recipeImageCurrent.value && dom.recipeImageRemoved.value !== "true") {
+    renderRecipeImagePreview();
+    return;
+  }
+
+  dom.recipeImageCurrent.value = "";
+  dom.recipeImageRemoved.value = "true";
+  renderRecipeImagePreview();
+}
+
+function resetRecipeImageState() {
+  dom.recipeImageFile.value = "";
+  dom.recipeImageCurrent.value = "";
+  dom.recipeImageRemoved.value = "false";
+  renderRecipeImagePreview();
+}
+
+function renderRecipeImagePreview() {
+  revokeRecipeImagePreviewUrl();
+
+  const selectedFile = dom.recipeImageFile.files?.[0];
+  if (selectedFile) {
+    recipeImagePreviewUrl = URL.createObjectURL(selectedFile);
+    dom.recipeImagePreviewImg.src = recipeImagePreviewUrl;
+    dom.recipeImagePreviewImg.alt = selectedFile.name || "Recipe image preview";
+    dom.recipeImagePreviewStatus.textContent = "New image selected. Save the recipe to keep it.";
+    dom.clearRecipeImage.textContent = dom.recipeImageCurrent.value ? "Use Saved Image" : "Remove Image";
+    dom.recipeImagePreview.classList.remove("hidden");
+    return;
+  }
+
+  const currentImage = dom.recipeImageRemoved.value === "true" ? "" : normalizeImageSource(dom.recipeImageCurrent.value);
+  if (!currentImage) {
+    dom.recipeImagePreviewImg.removeAttribute("src");
+    dom.recipeImagePreviewImg.alt = "";
+    dom.recipeImagePreviewStatus.textContent = "";
+    dom.clearRecipeImage.textContent = "Remove Image";
+    dom.recipeImagePreview.classList.add("hidden");
+    return;
+  }
+
+  dom.recipeImagePreviewImg.src = currentImage;
+  dom.recipeImagePreviewImg.alt = "Recipe image preview";
+  dom.recipeImagePreviewStatus.textContent = "Current saved image.";
+  dom.clearRecipeImage.textContent = "Remove Image";
+  dom.recipeImagePreview.classList.remove("hidden");
+}
+
+function revokeRecipeImagePreviewUrl() {
+  if (!recipeImagePreviewUrl) {
+    return;
+  }
+
+  URL.revokeObjectURL(recipeImagePreviewUrl);
+  recipeImagePreviewUrl = "";
+}
+
+async function collectRecipeImage(currentRecipe = null) {
+  try {
+    const selectedFile = dom.recipeImageFile.files?.[0];
+    if (selectedFile) {
+      return await prepareRecipeImage(selectedFile);
+    }
+
+    if (dom.recipeImageRemoved.value === "true") {
+      return "";
+    }
+
+    return normalizeImageSource(dom.recipeImageCurrent.value || currentRecipe?.image);
+  } catch (error) {
+    return null;
+  }
+}
+
+async function prepareRecipeImage(file) {
+  if (!file || !file.type.startsWith("image/")) {
+    return null;
+  }
+
+  const dataUrl = await readFileAsDataUrl(file);
+  const image = await loadImageElement(dataUrl);
+  const longestSide = Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height);
+
+  if (!longestSide) {
+    return null;
+  }
+
+  const scale = Math.min(1, RECIPE_IMAGE_MAX_DIMENSION / longestSide);
+  const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+  const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return null;
+  }
+
+  canvas.width = width;
+  canvas.height = height;
+
+  const outputType = file.type === "image/png" ? "image/png" : "image/jpeg";
+  if (outputType === "image/jpeg") {
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL(
+    outputType,
+    outputType === "image/jpeg" ? RECIPE_IMAGE_OUTPUT_QUALITY : undefined,
+  );
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageElement(source) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = source;
+  });
+}
+
+function renderRecipeImage(container, imageElement, imageSource, title) {
+  const normalizedImage = normalizeImageSource(imageSource);
+  if (!container || !imageElement) {
+    return;
+  }
+
+  if (!normalizedImage) {
+    container.classList.add("hidden");
+    imageElement.removeAttribute("src");
+    imageElement.alt = "";
+    return;
+  }
+
+  imageElement.src = normalizedImage;
+  imageElement.alt = `${title} recipe image`;
+  container.classList.remove("hidden");
+}
+
+function normalizeImageSource(value) {
+  const candidate = String(value || "").trim();
+  if (!candidate) {
+    return "";
+  }
+
+  if (candidate.startsWith("data:image/")) {
+    return candidate;
+  }
+
+  const parsedUrl = safeUrl(candidate);
+  return parsedUrl ? parsedUrl.toString() : "";
 }
 
 function parseRecipeLinks(text) {

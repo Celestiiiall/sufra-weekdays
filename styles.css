@@ -520,6 +520,34 @@ button:active {
   margin-top: 2px;
 }
 
+.recipe-image-preview {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--field-bg);
+}
+
+.recipe-image-preview-img,
+.recipe-image,
+.current-pick-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 16px;
+  background: rgba(29, 26, 23, 0.08);
+}
+
+.recipe-image-preview-copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .helper-line.ok {
   color: var(--sage);
 }
@@ -640,6 +668,11 @@ button:active {
   padding: 16px;
   display: grid;
   gap: 12px;
+}
+
+.recipe-image-shell {
+  overflow: hidden;
+  border-radius: 16px;
 }
 
 .current-picks {

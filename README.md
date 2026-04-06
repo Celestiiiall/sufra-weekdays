@@ -4,6 +4,7 @@ A static recipe randomizer built as a lightweight web app.
 
 It includes:
 - One permanent saved recipe list
+- One optional image per recipe
 - User-added recipe links for videos, blog posts, or other references
 - Automatic no-repeat rounds that restart after every saved recipe has been used once
 - Manual `Mark Used` and `Make Available` controls
@@ -20,7 +21,7 @@ It includes:
 No dependencies are required.
 
 1. Open `index.html` in a browser.
-2. Add recipes and paste one link per line.
+2. Add recipes and optionally attach one image for each recipe.
 3. Add ingredients one per line, or separate them with commas or semicolons.
 4. Use `Edit Recipe` on any saved card to bring it back into the form.
 5. Use `Pick Recipes` to draw from the saved list.
