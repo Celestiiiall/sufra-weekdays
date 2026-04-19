@@ -7,15 +7,18 @@ const COLLAPSED_NOTES_LIMIT = 280;
 const COLLAPSED_INGREDIENT_LIMIT = 8;
 const COLLAPSED_LINK_LIMIT = 2;
 const STORAGE_KEY = "sufra-recipe-picker-v1";
+const SYNC_SESSION_KEY = "sufra-recipe-sync-session-v1";
 const LEGACY_STORAGE_KEY = "sufra-weekdays-v1";
 const THEME_STORAGE_KEY = "sufra-weekdays-theme";
 const SHARE_HASH_PREFIX = "#pool=";
-const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-10";
+const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-11";
 const DEFAULT_PICKER_SLOTS = ["lunch", "dinner"];
 const DEFAULT_PICKER_FEEDBACK =
   "Choose only the slots you want today, and the app will pull one matching recipe for each without repeating inside that slot's round.";
 const DEFAULT_EMPTY_PICKS =
   "No day plan yet. Choose today's slots, then tap Generate Today.";
+const DEFAULT_SYNC_DETAIL =
+  "Enable sync on one device, then use a short pairing code on another.";
 const THEME_COLORS = {
   light: "#efe3ce",
   dark: "#111827",
@@ -69,6 +72,20 @@ const dom = {
   editingRecipeId: document.getElementById("editing-recipe-id"),
   submitRecipe: document.getElementById("submit-recipe"),
   cancelEdit: document.getElementById("cancel-edit"),
+  syncStatus: document.getElementById("sync-status"),
+  syncDetail: document.getElementById("sync-detail"),
+  enableSync: document.getElementById("enable-sync"),
+  syncNow: document.getElementById("sync-now"),
+  showPairCode: document.getElementById("show-pair-code"),
+  connectDevice: document.getElementById("connect-device"),
+  disconnectSync: document.getElementById("disconnect-sync"),
+  pairCodePanel: document.getElementById("pair-code-panel"),
+  pairCodeValue: document.getElementById("pair-code-value"),
+  pairCodeExpiry: document.getElementById("pair-code-expiry"),
+  connectPanel: document.getElementById("connect-panel"),
+  pairCodeInput: document.getElementById("pair-code-input"),
+  confirmPair: document.getElementById("confirm-pair"),
+  cancelPair: document.getElementById("cancel-pair"),
   pickerSlots: [...document.querySelectorAll("[data-picker-slot]")],
   pickRecipes: document.getElementById("pick-recipes"),
   pickerFeedback: document.getElementById("picker-feedback"),
@@ -90,6 +107,19 @@ const dom = {
 let state = loadState();
 let pendingSharedPayload = readSharedPayloadFromLocation();
 let recipeImagePreviewUrl = "";
+let syncSession = loadSyncSession();
+const syncClient = window.SufraSyncClient?.createSyncClient?.(window.SUFRA_SYNC_CONFIG || {}) || null;
+const syncRuntime = {
+  pushTimer: 0,
+  pollTimer: 0,
+  inFlight: false,
+  isApplyingRemote: false,
+  pairCode: "",
+  pairCodeExpiresAt: "",
+  connectOpen: false,
+  message: "",
+  detail: "",
+};
 
 init();
 
@@ -110,6 +140,19 @@ function init() {
   dom.importPoolFile.addEventListener("change", handleImportFileSelection);
   dom.exportPool.addEventListener("click", exportRecipesAsJson);
   dom.clearPool.addEventListener("click", clearRecipes);
+  dom.enableSync.addEventListener("click", handleEnableSync);
+  dom.syncNow.addEventListener("click", () => pushStateToCloud({ manual: true }));
+  dom.showPairCode.addEventListener("click", handleShowPairCode);
+  dom.connectDevice.addEventListener("click", openConnectPanel);
+  dom.disconnectSync.addEventListener("click", handleDisconnectSync);
+  dom.confirmPair.addEventListener("click", handleConnectDevice);
+  dom.cancelPair.addEventListener("click", closeConnectPanel);
+  dom.pairCodeInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleConnectDevice();
+    }
+  });
   dom.importSharedLink.addEventListener("click", () => {
     if (pendingSharedPayload) {
       importSharedPayload(pendingSharedPayload, {
@@ -143,10 +186,19 @@ function init() {
 
   dom.pickRecipes.addEventListener("click", pickRecipesWithoutRepeats);
   window.addEventListener("hashchange", handleHashChange);
+  window.addEventListener("focus", () => pullStateFromCloud({ silent: true }));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      pullStateFromCloud({ silent: true });
+    }
+  });
 
   if (!tryAutoImportSharedPayload()) {
     render();
   }
+  renderSyncPanel();
+  startSyncPolling();
+  pullStateFromCloud({ silent: true, immediate: true });
   registerServiceWorker();
 }
 
@@ -206,8 +258,42 @@ function writeJsonToStorage(key, value) {
   return true;
 }
 
-function saveState() {
+function loadSyncSession() {
+  const stored = readJsonFromStorage(SYNC_SESSION_KEY);
+  if (!stored || typeof stored !== "object") {
+    return null;
+  }
+
+  const deviceToken = String(stored.deviceToken || "").trim();
+  const libraryId = String(stored.libraryId || "").trim();
+  const lastSyncedAt = normalizeIsoDate(stored.lastSyncedAt);
+
+  if (!deviceToken || !libraryId) {
+    return null;
+  }
+
+  return {
+    deviceToken,
+    libraryId,
+    lastSyncedAt: lastSyncedAt || "",
+  };
+}
+
+function saveSyncSession() {
+  if (!syncSession) {
+    localStorage.removeItem(SYNC_SESSION_KEY);
+    return;
+  }
+
+  writeJsonToStorage(SYNC_SESSION_KEY, syncSession);
+}
+
+function saveState(options = {}) {
   writeJsonToStorage(STORAGE_KEY, state);
+
+  if (!options.skipSync) {
+    scheduleCloudPush();
+  }
 }
 
 function normalizeState(raw) {
@@ -775,6 +861,7 @@ function render() {
   renderBoardHeading();
   renderBoard();
   renderSharedNotice();
+  renderSyncPanel();
 }
 
 function renderHero() {
@@ -1139,6 +1226,346 @@ function setPickerFeedback(message, tone = "muted") {
   dom.pickerFeedback.classList.add(tone);
 }
 
+function isSyncConfigured() {
+  return Boolean(syncClient?.isConfigured?.());
+}
+
+function hasSyncSession() {
+  return Boolean(syncSession?.deviceToken && syncSession?.libraryId);
+}
+
+function renderSyncPanel() {
+  const configured = isSyncConfigured();
+  const connected = hasSyncSession();
+  const summary = syncRuntime.message
+    || (configured
+      ? connected
+        ? "Cloud sync is active on this device."
+        : "This device is saving recipes locally only."
+      : "Cloud sync is not configured yet.");
+  const detail = syncRuntime.detail
+    || (configured
+      ? connected
+        ? getLastSyncedCopy(syncSession?.lastSyncedAt)
+        : DEFAULT_SYNC_DETAIL
+      : "Add your Cloud Run URL to sync-config.js to enable no-login device pairing.");
+
+  dom.syncStatus.textContent = summary;
+  dom.syncDetail.textContent = detail;
+  dom.enableSync.classList.toggle("hidden", !configured || connected);
+  dom.connectDevice.classList.toggle("hidden", !configured || connected);
+  dom.syncNow.classList.toggle("hidden", !configured || !connected);
+  dom.showPairCode.classList.toggle("hidden", !configured || !connected);
+  dom.disconnectSync.classList.toggle("hidden", !configured || !connected);
+  dom.pairCodePanel.classList.toggle("hidden", !syncRuntime.pairCode);
+  dom.connectPanel.classList.toggle("hidden", !syncRuntime.connectOpen || connected);
+  dom.pairCodeValue.textContent = syncRuntime.pairCode || "------";
+  dom.pairCodeExpiry.textContent = syncRuntime.pairCode
+    ? `Expires ${formatDateTime(syncRuntime.pairCodeExpiresAt)}.`
+    : "";
+}
+
+function getLastSyncedCopy(value) {
+  const iso = normalizeIsoDate(value);
+  if (!iso) {
+    return "This device is linked and ready to sync.";
+  }
+
+  return `Last synced ${formatDateTime(iso)}.`;
+}
+
+function markSyncConnected(result, message) {
+  syncSession = {
+    deviceToken: result.deviceToken,
+    libraryId: result.libraryId,
+    lastSyncedAt: new Date().toISOString(),
+  };
+  saveSyncSession();
+  syncRuntime.message = "Cloud sync is active on this device.";
+  syncRuntime.detail = message;
+  syncRuntime.connectOpen = false;
+  syncRuntime.pairCode = "";
+  syncRuntime.pairCodeExpiresAt = "";
+  renderSyncPanel();
+  startSyncPolling();
+}
+
+function clearSyncMessage() {
+  syncRuntime.message = "";
+  syncRuntime.detail = hasSyncSession()
+    ? getLastSyncedCopy(syncSession?.lastSyncedAt)
+    : DEFAULT_SYNC_DETAIL;
+}
+
+function scheduleCloudPush() {
+  if (!hasSyncSession() || !isSyncConfigured() || syncRuntime.isApplyingRemote) {
+    return;
+  }
+
+  window.clearTimeout(syncRuntime.pushTimer);
+  syncRuntime.pushTimer = window.setTimeout(() => {
+    syncRuntime.pushTimer = 0;
+    pushStateToCloud({ manual: false });
+  }, 900);
+}
+
+function startSyncPolling() {
+  window.clearInterval(syncRuntime.pollTimer);
+
+  if (!hasSyncSession() || !isSyncConfigured()) {
+    return;
+  }
+
+  const intervalMs = Math.max(15000, Number(window.SUFRA_SYNC_CONFIG?.pollIntervalMs) || 30000);
+  syncRuntime.pollTimer = window.setInterval(() => {
+    pullStateFromCloud({ silent: true });
+  }, intervalMs);
+}
+
+async function handleEnableSync() {
+  if (!isSyncConfigured()) {
+    syncRuntime.message = "Cloud sync is not configured yet.";
+    syncRuntime.detail = "Add your Cloud Run URL to sync-config.js before enabling sync.";
+    renderSyncPanel();
+    return;
+  }
+
+  if (hasSyncSession()) {
+    renderSyncPanel();
+    return;
+  }
+
+  try {
+    syncRuntime.message = "Creating a cloud library for this device...";
+    syncRuntime.detail = "Your current recipes will become the main synced list.";
+    renderSyncPanel();
+    const result = await syncClient.bootstrap(buildExportPayload());
+    state = normalizeState(result.appState);
+    saveState({ skipSync: true });
+    markSyncConnected(result, "Sync is live. Use Show Pair Code on this device to connect another one.");
+    render();
+  } catch (error) {
+    syncRuntime.message = "Cloud sync could not be enabled.";
+    syncRuntime.detail = error.message || "Try again after the backend is configured.";
+    renderSyncPanel();
+  }
+}
+
+async function handleShowPairCode() {
+  if (!hasSyncSession() || !isSyncConfigured()) {
+    return;
+  }
+
+  try {
+    syncRuntime.message = "Generating a pairing code...";
+    syncRuntime.detail = "Open the app on the other device and choose Connect This Device.";
+    renderSyncPanel();
+    const result = await syncClient.createPairingCode(syncSession.deviceToken);
+    syncRuntime.pairCode = String(result.code || "").trim().toUpperCase();
+    syncRuntime.pairCodeExpiresAt = normalizeIsoDate(result.expiresAt) || "";
+    clearSyncMessage();
+    renderSyncPanel();
+  } catch (error) {
+    syncRuntime.message = "The pairing code could not be created.";
+    syncRuntime.detail = error.message || "Try again.";
+    renderSyncPanel();
+  }
+}
+
+function openConnectPanel() {
+  syncRuntime.connectOpen = true;
+  syncRuntime.message = "Connect this device to an existing cloud library.";
+  syncRuntime.detail = "Enter the pairing code shown on the device that already has sync enabled.";
+  renderSyncPanel();
+  dom.pairCodeInput.focus();
+}
+
+function closeConnectPanel() {
+  syncRuntime.connectOpen = false;
+  dom.pairCodeInput.value = "";
+  clearSyncMessage();
+  renderSyncPanel();
+}
+
+async function handleConnectDevice() {
+  if (!isSyncConfigured()) {
+    syncRuntime.message = "Cloud sync is not configured yet.";
+    syncRuntime.detail = "Add your Cloud Run URL to sync-config.js before pairing devices.";
+    renderSyncPanel();
+    return;
+  }
+
+  const code = String(dom.pairCodeInput.value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8);
+
+  if (!code) {
+    dom.pairCodeInput.focus();
+    return;
+  }
+
+  if (state.recipes.length) {
+    const shouldReplace = window.confirm(
+      "Connecting this device will replace the current local recipes with the synced cloud library. Continue?",
+    );
+    if (!shouldReplace) {
+      return;
+    }
+  }
+
+  try {
+    syncRuntime.message = "Connecting this device...";
+    syncRuntime.detail = "The cloud library will replace the current local copy on this device.";
+    renderSyncPanel();
+    const result = await syncClient.pairWithCode(code);
+    state = normalizeState(result.appState);
+    saveState({ skipSync: true });
+    markSyncConnected(result, "This device is now linked to the same recipe library.");
+    dom.pairCodeInput.value = "";
+    render();
+  } catch (error) {
+    syncRuntime.message = "That pairing code did not work.";
+    syncRuntime.detail = error.message || "Ask the first device for a fresh code and try again.";
+    renderSyncPanel();
+  }
+}
+
+async function handleDisconnectSync() {
+  if (!hasSyncSession()) {
+    return;
+  }
+
+  const shouldDisconnect = window.confirm(
+    "Disconnect this device from cloud sync and keep only the current local copy here?",
+  );
+  if (!shouldDisconnect) {
+    return;
+  }
+
+  const deviceToken = syncSession.deviceToken;
+  syncSession = null;
+  saveSyncSession();
+  window.clearTimeout(syncRuntime.pushTimer);
+  syncRuntime.pushTimer = 0;
+  window.clearInterval(syncRuntime.pollTimer);
+  syncRuntime.pairCode = "";
+  syncRuntime.pairCodeExpiresAt = "";
+  syncRuntime.connectOpen = false;
+  syncRuntime.message = "This device was disconnected from cloud sync.";
+  syncRuntime.detail = "The recipes currently on this device were kept locally.";
+  renderSyncPanel();
+
+  if (isSyncConfigured()) {
+    try {
+      await syncClient.disconnect(deviceToken);
+    } catch (error) {
+      // The device is already disconnected locally, so a backend failure is non-blocking here.
+    }
+  }
+}
+
+async function pushStateToCloud({ manual = false } = {}) {
+  if (!hasSyncSession() || !isSyncConfigured() || syncRuntime.inFlight) {
+    return;
+  }
+
+  syncRuntime.inFlight = true;
+  window.clearTimeout(syncRuntime.pushTimer);
+  syncRuntime.pushTimer = 0;
+
+  try {
+    const result = await syncClient.pushLibrary(syncSession.deviceToken, buildExportPayload());
+    syncSession.lastSyncedAt = new Date().toISOString();
+    saveSyncSession();
+
+    if (result?.appState) {
+      syncRuntime.isApplyingRemote = true;
+      state = normalizeState(result.appState);
+      saveState({ skipSync: true });
+      render();
+    }
+
+    syncRuntime.message = "Cloud sync is active on this device.";
+    syncRuntime.detail = manual
+      ? "Cloud sync finished and this device is up to date."
+      : getLastSyncedCopy(syncSession.lastSyncedAt);
+  } catch (error) {
+    if (error.status === 401) {
+      syncSession = null;
+      saveSyncSession();
+      startSyncPolling();
+      syncRuntime.message = "This device is no longer linked to cloud sync.";
+      syncRuntime.detail = "Enable sync again or reconnect with a new pairing code.";
+    } else {
+      syncRuntime.message = "Cloud sync could not finish right now.";
+      syncRuntime.detail = error.message || "Your local recipes are still safe on this device.";
+    }
+  } finally {
+    syncRuntime.inFlight = false;
+    syncRuntime.isApplyingRemote = false;
+    renderSyncPanel();
+  }
+}
+
+async function pullStateFromCloud({ silent = false, immediate = false } = {}) {
+  if (!hasSyncSession() || !isSyncConfigured() || syncRuntime.inFlight) {
+    return;
+  }
+
+  if (!immediate && syncRuntime.pushTimer) {
+    return;
+  }
+
+  syncRuntime.inFlight = true;
+
+  try {
+    const result = await syncClient.fetchLibrary(syncSession.deviceToken);
+    syncRuntime.isApplyingRemote = true;
+    state = normalizeState(result.appState);
+    saveState({ skipSync: true });
+    syncSession.lastSyncedAt = new Date().toISOString();
+    saveSyncSession();
+    render();
+
+    if (!silent) {
+      syncRuntime.message = "Cloud sync is active on this device.";
+      syncRuntime.detail = "This device pulled the latest recipes from the cloud.";
+    } else {
+      clearSyncMessage();
+    }
+  } catch (error) {
+    if (error.status === 401) {
+      syncSession = null;
+      saveSyncSession();
+      startSyncPolling();
+      syncRuntime.message = "This device is no longer linked to cloud sync.";
+      syncRuntime.detail = "Enable sync again or reconnect with a fresh pairing code.";
+    } else if (!silent) {
+      syncRuntime.message = "Cloud sync could not refresh right now.";
+      syncRuntime.detail = error.message || "Your local recipes are still available.";
+    }
+  } finally {
+    syncRuntime.inFlight = false;
+    syncRuntime.isApplyingRemote = false;
+    renderSyncPanel();
+  }
+}
+
+function formatDateTime(value) {
+  const parsedValue = new Date(value);
+  if (Number.isNaN(parsedValue.valueOf())) {
+    return "soon";
+  }
+
+  return parsedValue.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function buildShareUrl() {
   const payload = buildExportPayload();
   const token = encodeSharePayload(payload);
@@ -1157,7 +1584,7 @@ function buildShareUrl() {
 function buildExportPayload() {
   return {
     app: "sufra-recipes",
-    version: 3,
+    version: 4,
     collection: {
       title: APP_TITLE,
     },

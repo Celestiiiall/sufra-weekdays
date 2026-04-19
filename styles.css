@@ -653,6 +653,34 @@ button:active {
     var(--panel);
 }
 
+.sync-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.pair-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--field-bg);
+}
+
+.pair-code-value {
+  display: inline-block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: clamp(1.4rem, 4vw, 2rem);
+  letter-spacing: 0.18em;
+}
+
+#enable-sync,
+#confirm-pair {
+  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+  color: #fff7ef;
+  box-shadow: 0 14px 28px rgba(182, 82, 22, 0.24);
+}
+
 .support-list {
   margin-top: 14px;
   padding-left: 18px;

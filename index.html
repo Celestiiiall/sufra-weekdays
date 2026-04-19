@@ -8,9 +8,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Sufra Recipes" />
     <title>Sufra Recipes</title>
-    <link rel="manifest" href="manifest.webmanifest?v=20260320-10" />
-    <link rel="icon" href="icon.svg?v=20260320-10" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="icon.svg?v=20260320-10" />
+    <link rel="manifest" href="manifest.webmanifest?v=20260320-11" />
+    <link rel="icon" href="icon.svg?v=20260320-11" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon.svg?v=20260320-11" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -29,7 +29,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260320-10" />
+    <link rel="stylesheet" href="styles.css?v=20260320-11" />
   </head>
   <body>
     <div class="page-glow glow-a"></div>
@@ -195,6 +195,54 @@
         </div>
 
         <aside class="side-stack">
+          <section class="panel support-panel sync-panel">
+            <div class="section-head compact">
+              <div>
+                <p class="section-kicker">Cloud sync</p>
+                <h2>Connect Devices</h2>
+              </div>
+            </div>
+
+            <p id="sync-status" class="section-copy">
+              This device is saving recipes locally only.
+            </p>
+            <p id="sync-detail" class="helper-line">
+              Enable sync on one device, then use a short pairing code on another.
+            </p>
+
+            <div class="button-row">
+              <button id="enable-sync" type="button">Enable Sync</button>
+              <button id="sync-now" class="ghost hidden" type="button">Sync Now</button>
+              <button id="show-pair-code" class="ghost hidden" type="button">Show Pair Code</button>
+              <button id="connect-device" class="ghost" type="button">Connect This Device</button>
+              <button id="disconnect-sync" class="ghost danger hidden" type="button">Disconnect This Device</button>
+            </div>
+
+            <div id="pair-code-panel" class="pair-panel hidden">
+              <p class="section-kicker">Pairing Code</p>
+              <strong id="pair-code-value" class="pair-code-value">------</strong>
+              <p id="pair-code-expiry" class="helper-line muted"></p>
+            </div>
+
+            <div id="connect-panel" class="pair-panel hidden">
+              <label>
+                Pairing Code
+                <input
+                  id="pair-code-input"
+                  type="text"
+                  inputmode="text"
+                  autocomplete="one-time-code"
+                  spellcheck="false"
+                  placeholder="ABC123"
+                />
+              </label>
+              <div class="button-row">
+                <button id="confirm-pair" type="button">Connect Device</button>
+                <button id="cancel-pair" class="ghost" type="button">Cancel</button>
+              </div>
+            </div>
+          </section>
+
           <section class="stats-grid" aria-live="polite">
             <article class="panel stat-card">
               <p>Total Recipes</p>
@@ -366,6 +414,8 @@
       </article>
     </template>
 
-    <script src="app.js?v=20260320-10"></script>
+    <script src="sync-config.js?v=20260320-11"></script>
+    <script src="sync-client.js?v=20260320-11"></script>
+    <script src="app.js?v=20260320-11"></script>
   </body>
 </html>
