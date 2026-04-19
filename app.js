@@ -11,7 +11,8 @@ const SYNC_SESSION_KEY = "sufra-recipe-sync-session-v1";
 const LEGACY_STORAGE_KEY = "sufra-weekdays-v1";
 const THEME_STORAGE_KEY = "sufra-weekdays-theme";
 const SHARE_HASH_PREFIX = "#pool=";
-const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-12";
+const DEFAULT_SYNC_API_BASE_URL = "https://sufra-sync-backend-945161540676.us-central1.run.app";
+const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-13";
 const DEFAULT_PICKER_SLOTS = ["lunch", "dinner"];
 const DEFAULT_PICKER_FEEDBACK =
   "Choose only the slots you want today, and the app will pull one matching recipe for each without repeating inside that slot's round.";
@@ -108,7 +109,11 @@ let state = loadState();
 let pendingSharedPayload = readSharedPayloadFromLocation();
 let recipeImagePreviewUrl = "";
 let syncSession = loadSyncSession();
-const syncClient = window.SufraSyncClient?.createSyncClient?.(window.SUFRA_SYNC_CONFIG || {}) || null;
+const syncClient =
+  window.SufraSyncClient?.createSyncClient?.({
+    ...(window.SUFRA_SYNC_CONFIG || {}),
+    apiBaseUrl: String(window.SUFRA_SYNC_CONFIG?.apiBaseUrl || "").trim() || DEFAULT_SYNC_API_BASE_URL,
+  }) || null;
 const syncRuntime = {
   pushTimer: 0,
   pollTimer: 0,
