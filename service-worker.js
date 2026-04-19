@@ -1,14 +1,14 @@
-const CACHE_NAME = "sufra-recipes-v13";
+const CACHE_NAME = "sufra-recipes-v14";
 const APP_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=20260320-13",
-  "./sync-config.js?v=20260320-13",
-  "./sync-client.js?v=20260320-13",
-  "./app.js?v=20260320-13",
-  "./manifest.webmanifest?v=20260320-13",
-  "./icon.svg?v=20260320-13",
-  "./service-worker.js?v=20260320-13",
+  "./styles.css?v=20260320-14",
+  "./sync-config-v14.js?v=20260320-14",
+  "./sync-client-v14.js?v=20260320-14",
+  "./app-sync-v14.js?v=20260320-14",
+  "./manifest.webmanifest?v=20260320-14",
+  "./icon.svg?v=20260320-14",
+  "./service-worker.js?v=20260320-14",
 ];
 
 self.addEventListener("install", (event) => {
