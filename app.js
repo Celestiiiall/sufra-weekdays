@@ -11,7 +11,7 @@ const SYNC_SESSION_KEY = "sufra-recipe-sync-session-v1";
 const LEGACY_STORAGE_KEY = "sufra-weekdays-v1";
 const THEME_STORAGE_KEY = "sufra-weekdays-theme";
 const SHARE_HASH_PREFIX = "#pool=";
-const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-11";
+const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-12";
 const DEFAULT_PICKER_SLOTS = ["lunch", "dinner"];
 const DEFAULT_PICKER_FEEDBACK =
   "Choose only the slots you want today, and the app will pull one matching recipe for each without repeating inside that slot's round.";
