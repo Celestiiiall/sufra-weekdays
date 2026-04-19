@@ -8,9 +8,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Sufra Recipes" />
     <title>Sufra Recipes</title>
-    <link rel="manifest" href="manifest.webmanifest?v=20260320-9" />
-    <link rel="icon" href="icon.svg?v=20260320-9" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="icon.svg?v=20260320-9" />
+    <link rel="manifest" href="manifest.webmanifest?v=20260320-10" />
+    <link rel="icon" href="icon.svg?v=20260320-10" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon.svg?v=20260320-10" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -29,7 +29,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260320-9" />
+    <link rel="stylesheet" href="styles.css?v=20260320-10" />
   </head>
   <body>
     <div class="page-glow glow-a"></div>
@@ -47,8 +47,8 @@
           </div>
           <h1>Save recipes once and let the app choose what is next.</h1>
           <p class="hero-text">
-            Keep everything in one big recipe list, randomize without repeats, and let the app start
-            a fresh round automatically after every saved recipe has been used once.
+            Keep everything in one saved recipe list, choose the meal slots you want for today, and
+            let the app rotate through matching recipes without repeats until that slot needs a fresh round.
           </p>
         </div>
 
@@ -57,18 +57,18 @@
           <strong id="pool-summary">0 saved recipes</strong>
           <p id="hero-collection-name" class="hero-plan-name">Permanent recipe list</p>
           <p id="pool-status-display" class="plan-focus-display">
-            Recipes stay saved until you remove them yourself, and rounds restart automatically.
+            Recipes stay saved until you remove them yourself, and each meal slot restarts automatically.
           </p>
         </div>
       </header>
 
       <section id="shared-banner" class="panel share-banner hidden" aria-live="polite">
         <div class="share-banner-copy">
-          <p class="section-kicker">Shared recipes detected</p>
+          <p class="section-kicker">Shared recipes ready</p>
           <p id="shared-banner-text" class="share-banner-text"></p>
         </div>
         <div class="share-actions">
-          <button id="import-shared-link" type="button">Import Shared Recipes</button>
+          <button id="import-shared-link" type="button">Use Shared Recipes</button>
           <button id="dismiss-shared-link" class="ghost" type="button">Dismiss</button>
         </div>
       </section>
@@ -82,20 +82,23 @@
                 <h2>Saved Recipes</h2>
               </div>
               <p class="section-copy">
-                Everything lives in one recipe library. Share it, import it, export it, or clear it
-                only when you really want to start over.
+                Everything lives in one recipe library. Shared links can open straight into import,
+                and JSON files stay available for larger image-heavy recipe collections.
               </p>
             </div>
 
             <div class="button-row">
               <button id="share-pool" type="button">Share Recipes</button>
-              <button id="import-shared" class="ghost" type="button">Import Shared Link</button>
+              <button id="import-shared" class="ghost" type="button">Import Recipes</button>
+              <button id="import-json-file" class="ghost" type="button">Choose JSON File</button>
               <button id="export-pool" class="ghost" type="button">Export JSON</button>
               <button id="clear-pool" class="ghost danger" type="button">Clear Recipes</button>
             </div>
 
+            <input id="import-pool-file" class="hidden" type="file" accept="application/json,.json" />
+
             <p id="share-feedback" class="helper-line">
-              Share by link, native share sheet, or JSON export for larger recipe libraries.
+              Shared links import automatically when opened on an empty app. Import Recipes checks the clipboard first, and JSON files stay available when links get too large.
             </p>
           </section>
 
@@ -214,29 +217,41 @@
           <section class="panel support-panel">
             <div class="section-head compact">
               <div>
-                <p class="section-kicker">Randomizer</p>
-                <h2>Pick Recipes</h2>
+                <p class="section-kicker">Day generator</p>
+                <h2>Plan Today</h2>
               </div>
             </div>
 
             <div class="filter-grid">
-              <label>
-                How Many Picks
-                <select id="picker-count">
-                  <option value="1">1 pick</option>
-                  <option value="2">2 picks</option>
-                  <option value="3">3 picks</option>
-                  <option value="4">4 picks</option>
-                </select>
-              </label>
+              <div class="slot-picker">
+                <p class="slot-picker-label">Today's Meal Slots</p>
+                <div class="slot-picker-grid">
+                  <label class="slot-option">
+                    <input data-picker-slot type="checkbox" value="breakfast" />
+                    <span>Breakfast</span>
+                  </label>
+                  <label class="slot-option">
+                    <input data-picker-slot type="checkbox" value="lunch" />
+                    <span>Lunch</span>
+                  </label>
+                  <label class="slot-option">
+                    <input data-picker-slot type="checkbox" value="dinner" />
+                    <span>Dinner</span>
+                  </label>
+                  <label class="slot-option">
+                    <input data-picker-slot type="checkbox" value="snack" />
+                    <span>Snack</span>
+                  </label>
+                </div>
+              </div>
               <div class="button-row">
-                <button id="pick-recipes" type="button">Pick Recipes</button>
+                <button id="pick-recipes" type="button">Generate Today</button>
               </div>
               <p id="picker-feedback" class="helper-line">
-                The app avoids repeats until the round is complete, then the next pick starts over automatically.
+                Choose only the slots you want today, and the app will pull one matching recipe for each without repeating inside that slot's round.
               </p>
               <div id="current-picks" class="current-picks">
-                <p class="empty-copy">No picks yet. Tap Pick Recipes to choose from the list.</p>
+                <p class="empty-copy">No day plan yet. Choose today's slots, then tap Generate Today.</p>
               </div>
             </div>
           </section>
@@ -277,13 +292,14 @@
 
           <section class="panel support-panel">
             <p class="section-kicker">How it works</p>
-            <h2>Automatic Rounds</h2>
+            <h2>Slot-Based Rounds</h2>
             <p>
-              Recipes never disappear after they are picked. Once the last unused recipe has had a
-              turn, the next pick starts a new round automatically.
+              Recipes never disappear after they are picked. Each meal slot rotates through its own
+              matching recipes before that slot starts a fresh round automatically.
             </p>
             <ul class="support-list">
               <li>Recipes stay saved until you remove them yourself.</li>
+              <li>Pick only lunch and dinner, lunch and snack, or any other combination you need today.</li>
               <li>YouTube and Vimeo links preview inline.</li>
               <li>Other links still save as quick-open references.</li>
             </ul>
@@ -297,8 +313,8 @@
           <h2 id="board-title">All Saved Recipes</h2>
         </div>
         <p id="board-copy" class="section-copy board-copy">
-          Every saved recipe stays in the list. Random picks use the whole library and start a new
-          round automatically after the last unused recipe is picked.
+          Every saved recipe stays in the list. Day picks use the meal slot tags you choose above
+          and restart each slot automatically after its saved recipes have all had a turn.
         </p>
       </section>
 
@@ -321,6 +337,7 @@
         <div class="video-link-row"></div>
         <div class="embed-stack"></div>
         <div class="meal-actions">
+          <button class="action-button expand hidden" type="button">Show More</button>
           <button class="action-button toggle" type="button">Mark Used</button>
           <button class="action-button edit" type="button">Edit Recipe</button>
           <button class="action-button remove" type="button">Remove</button>
@@ -349,6 +366,6 @@
       </article>
     </template>
 
-    <script src="app.js?v=20260320-9"></script>
+    <script src="app.js?v=20260320-10"></script>
   </body>
 </html>

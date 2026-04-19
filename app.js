@@ -3,11 +3,19 @@ const RECIPE_TITLE_LIMIT = 140;
 const RECIPE_NOTES_LIMIT = 2000;
 const RECIPE_IMAGE_MAX_DIMENSION = 960;
 const RECIPE_IMAGE_OUTPUT_QUALITY = 0.82;
+const COLLAPSED_NOTES_LIMIT = 280;
+const COLLAPSED_INGREDIENT_LIMIT = 8;
+const COLLAPSED_LINK_LIMIT = 2;
 const STORAGE_KEY = "sufra-recipe-picker-v1";
 const LEGACY_STORAGE_KEY = "sufra-weekdays-v1";
 const THEME_STORAGE_KEY = "sufra-weekdays-theme";
 const SHARE_HASH_PREFIX = "#pool=";
-const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-9";
+const SERVICE_WORKER_URL = "./service-worker.js?v=20260320-10";
+const DEFAULT_PICKER_SLOTS = ["lunch", "dinner"];
+const DEFAULT_PICKER_FEEDBACK =
+  "Choose only the slots you want today, and the app will pull one matching recipe for each without repeating inside that slot's round.";
+const DEFAULT_EMPTY_PICKS =
+  "No day plan yet. Choose today's slots, then tap Generate Today.";
 const THEME_COLORS = {
   light: "#efe3ce",
   dark: "#111827",
@@ -31,6 +39,8 @@ const dom = {
   themeToggle: document.getElementById("theme-toggle"),
   sharePool: document.getElementById("share-pool"),
   importShared: document.getElementById("import-shared"),
+  importJsonFile: document.getElementById("import-json-file"),
+  importPoolFile: document.getElementById("import-pool-file"),
   exportPool: document.getElementById("export-pool"),
   clearPool: document.getElementById("clear-pool"),
   shareFeedback: document.getElementById("share-feedback"),
@@ -59,7 +69,7 @@ const dom = {
   editingRecipeId: document.getElementById("editing-recipe-id"),
   submitRecipe: document.getElementById("submit-recipe"),
   cancelEdit: document.getElementById("cancel-edit"),
-  pickerCount: document.getElementById("picker-count"),
+  pickerSlots: [...document.querySelectorAll("[data-picker-slot]")],
   pickRecipes: document.getElementById("pick-recipes"),
   pickerFeedback: document.getElementById("picker-feedback"),
   currentPicks: document.getElementById("current-picks"),
@@ -88,7 +98,6 @@ function init() {
   syncFilterControls();
   syncPickerControls();
   resetRecipeForm();
-  renderSharedNotice();
 
   dom.themeToggle.addEventListener("click", toggleTheme);
   dom.recipeForm.addEventListener("submit", handleSubmitRecipe);
@@ -96,12 +105,16 @@ function init() {
   dom.recipeImageFile.addEventListener("change", handleRecipeImageSelection);
   dom.clearRecipeImage.addEventListener("click", clearRecipeImage);
   dom.sharePool.addEventListener("click", handleSharePool);
-  dom.importShared.addEventListener("click", handleImportPrompt);
+  dom.importShared.addEventListener("click", handleImportRecipes);
+  dom.importJsonFile.addEventListener("click", openImportFilePicker);
+  dom.importPoolFile.addEventListener("change", handleImportFileSelection);
   dom.exportPool.addEventListener("click", exportRecipesAsJson);
   dom.clearPool.addEventListener("click", clearRecipes);
   dom.importSharedLink.addEventListener("click", () => {
     if (pendingSharedPayload) {
-      importSharedPayload(pendingSharedPayload);
+      importSharedPayload(pendingSharedPayload, {
+        successMessage: "Shared recipes imported from the link.",
+      });
     }
   });
   dom.dismissSharedLink.addEventListener("click", () => dismissSharedNotice({ clearHash: true }));
@@ -124,15 +137,16 @@ function init() {
     render();
   });
 
-  dom.pickerCount.addEventListener("change", (event) => {
-    state.picker.pickCount = normalizePickCount(event.target.value);
-    saveState();
-  });
+  for (const checkbox of dom.pickerSlots) {
+    checkbox.addEventListener("change", handlePickerSlotChange);
+  }
 
   dom.pickRecipes.addEventListener("click", pickRecipesWithoutRepeats);
   window.addEventListener("hashchange", handleHashChange);
 
-  render();
+  if (!tryAutoImportSharedPayload()) {
+    render();
+  }
   registerServiceWorker();
 }
 
@@ -147,7 +161,7 @@ function createDefaultState() {
       currentPickIds: [],
     },
     picker: {
-      pickCount: 1,
+      selectedSlots: [...DEFAULT_PICKER_SLOTS],
     },
     filters: {
       query: "",
@@ -219,7 +233,7 @@ function normalizeState(raw) {
       currentPickIds,
     },
     picker: {
-      pickCount: normalizePickCount(baseState?.picker?.pickCount),
+      selectedSlots: normalizePickerSlots(baseState?.picker?.selectedSlots),
     },
     filters: {
       query: String(baseState?.filters?.query || "").slice(0, 120),
@@ -257,7 +271,7 @@ function migrateLegacyPlannerState(raw) {
       currentPickIds: [],
     },
     picker: {
-      pickCount: 1,
+      selectedSlots: [...DEFAULT_PICKER_SLOTS],
     },
     filters: {
       query: "",
@@ -421,21 +435,47 @@ async function handleSharePool() {
   }
 
   const shareUrl = buildShareUrl();
-  if (!shareUrl) {
-    setShareFeedback("This library is too large for a share link. Use Export JSON instead, especially if recipes include images.", "warn");
+  if (shareUrl) {
+    const shareData = {
+      title: APP_TITLE,
+      text: `${state.recipes.length} saved recipes ready for slot-based day picks`,
+      url: shareUrl,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        setShareFeedback("Recipes shared.", "ok");
+        return;
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          return;
+        }
+      }
+    }
+
+    const copied = await copyText(shareUrl);
+    if (copied) {
+      setShareFeedback("Share link copied to clipboard.", "ok");
+      return;
+    }
+
+    window.prompt("Copy this recipe-library share link.", shareUrl);
+    setShareFeedback("Share link ready.", "ok");
     return;
   }
 
-  const shareData = {
-    title: APP_TITLE,
-    text: `${state.recipes.length} saved recipes ready for automatic rounds`,
-    url: shareUrl,
-  };
+  const exportContents = `${JSON.stringify(buildExportPayload(), null, 2)}\n`;
+  const exportFile = createJsonFile(`${slugify(APP_TITLE)}.json`, exportContents);
 
-  if (navigator.share) {
+  if (navigator.share && exportFile && canShareFiles([exportFile])) {
     try {
-      await navigator.share(shareData);
-      setShareFeedback("Recipes shared.", "ok");
+      await navigator.share({
+        title: APP_TITLE,
+        text: `${state.recipes.length} saved recipes exported as a JSON file`,
+        files: [exportFile],
+      });
+      setShareFeedback("Recipes shared as a JSON file.", "ok");
       return;
     } catch (error) {
       if (error?.name === "AbortError") {
@@ -444,18 +484,32 @@ async function handleSharePool() {
     }
   }
 
-  const copied = await copyText(shareUrl);
-  if (copied) {
-    setShareFeedback("Share link copied to clipboard.", "ok");
+  downloadTextFile(exportFile?.name || `${slugify(APP_TITLE)}.json`, exportContents, "application/json");
+  setShareFeedback(
+    "This library was too large for a share link, so a JSON export was downloaded instead.",
+    "ok",
+  );
+}
+
+async function handleImportRecipes() {
+  if (pendingSharedPayload) {
+    importSharedPayload(pendingSharedPayload, {
+      successMessage: "Shared recipes imported from the link.",
+    });
     return;
   }
 
-  window.prompt("Copy this recipe-library share link.", shareUrl);
-  setShareFeedback("Share link ready.", "ok");
-}
+  const clipboardPayload = await readSharedPayloadFromClipboard();
+  if (clipboardPayload) {
+    importSharedPayload(clipboardPayload, {
+      successMessage: "Recipes imported from the clipboard.",
+    });
+    return;
+  }
 
-function handleImportPrompt() {
-  const value = window.prompt("Paste a Sufra share link, share token, or exported JSON.");
+  const value = window.prompt(
+    "Paste a Sufra share link, share token, or exported JSON. If you received a JSON file instead, tap Choose JSON File.",
+  );
   if (!value) {
     return;
   }
@@ -466,7 +520,9 @@ function handleImportPrompt() {
     return;
   }
 
-  importSharedPayload(payload);
+  importSharedPayload(payload, {
+    successMessage: "Recipes imported.",
+  });
 }
 
 function exportRecipesAsJson() {
@@ -500,22 +556,20 @@ function clearRecipes() {
   syncPickerControls();
   resetRecipeForm();
   dismissSharedNotice({ clearHash: false });
-  setPickerFeedback(
-    "The app avoids repeats until the round is complete, then the next pick starts over automatically.",
-    "muted",
-  );
+  setPickerFeedback(DEFAULT_PICKER_FEEDBACK, "muted");
   setShareFeedback("Recipe library cleared.", "muted");
   render();
 }
 
-function importSharedPayload(payload) {
+function importSharedPayload(payload, options = {}) {
   const importedState = normalizeState(payload);
   const shouldReplace =
+    options.skipConfirm ||
     !state.recipes.length ||
     window.confirm("Importing will replace the current recipe library on this device. Continue?");
 
   if (!shouldReplace) {
-    return;
+    return false;
   }
 
   state = importedState;
@@ -524,12 +578,10 @@ function importSharedPayload(payload) {
   syncPickerControls();
   resetRecipeForm();
   dismissSharedNotice({ clearHash: true });
-  setShareFeedback("Shared recipes imported.", "ok");
-  setPickerFeedback(
-    "The app avoids repeats until the round is complete, then the next pick starts over automatically.",
-    "muted",
-  );
+  setShareFeedback(options.successMessage || "Shared recipes imported.", "ok");
+  setPickerFeedback(DEFAULT_PICKER_FEEDBACK, "muted");
   render();
+  return true;
 }
 
 function pickRecipesWithoutRepeats() {
@@ -540,67 +592,85 @@ function pickRecipesWithoutRepeats() {
     return;
   }
 
-  const requestedCount = normalizePickCount(state.picker.pickCount);
-  let eligibleRecipes = getAvailableRecipes();
-  let startedNewRound = false;
-
-  if (!eligibleRecipes.length) {
-    state.cycle.usedRecipeIds = [];
-    state.cycle.currentPickIds = [];
-    eligibleRecipes = getAvailableRecipes();
-    startedNewRound = true;
+  const selectedSlots = normalizePickerSlots(state.picker.selectedSlots, { fallbackToDefault: false });
+  if (!selectedSlots.length) {
+    setPickerFeedback("Choose at least one meal slot first.", "warn");
+    return;
   }
 
-  const selectedRecipes = shuffle(eligibleRecipes).slice(0, Math.min(requestedCount, eligibleRecipes.length));
-  const selectedIds = selectedRecipes.map((recipe) => recipe.id);
+  const pickedRecipes = [];
+  const restartedSlots = [];
+  const missingSlots = [];
 
+  for (const mealType of selectedSlots) {
+    const slotRecipes = state.recipes.filter((recipe) => recipe.mealType === mealType);
+    if (!slotRecipes.length) {
+      missingSlots.push(getMealTypeLabel(mealType));
+      continue;
+    }
+
+    let eligibleRecipes = getAvailableRecipes(mealType);
+    if (!eligibleRecipes.length) {
+      resetRoundForMealType(mealType);
+      eligibleRecipes = getAvailableRecipes(mealType);
+      restartedSlots.push(getMealTypeLabel(mealType));
+    }
+
+    const selectedRecipe = shuffle(eligibleRecipes)[0];
+    if (selectedRecipe) {
+      pickedRecipes.push(selectedRecipe);
+    }
+  }
+
+  if (!pickedRecipes.length) {
+    if (missingSlots.length) {
+      setPickerFeedback(
+        `Add ${formatSlotList(missingSlots)} recipe${pluralize(missingSlots.length)} first.`,
+        "warn",
+      );
+      render();
+      return;
+    }
+
+    setPickerFeedback("No matching recipes were ready for the selected meal slots.", "warn");
+    render();
+    return;
+  }
+
+  const selectedIds = pickedRecipes.map((recipe) => recipe.id);
   state.cycle.currentPickIds = selectedIds;
   state.cycle.usedRecipeIds = uniqueIds([...state.cycle.usedRecipeIds, ...selectedIds]);
 
   saveState();
   render();
 
-  const remainingRecipes = getAvailableRecipes().length;
+  const feedbackParts = [
+    `Picked ${pickedRecipes.length} recipe${pluralize(pickedRecipes.length)} for ${formatSlotList(
+      pickedRecipes.map((recipe) => getMealTypeLabel(recipe.mealType)),
+    )}.`,
+  ];
 
-  if (startedNewRound) {
-    setPickerFeedback(
-      `Started a fresh round and picked ${selectedRecipes.length} recipe${pluralize(selectedRecipes.length)}.`,
-      "ok",
-    );
-    return;
+  if (restartedSlots.length) {
+    feedbackParts.push(`${formatSlotList(restartedSlots)} restarted automatically.`);
   }
 
-  if (selectedRecipes.length < requestedCount) {
-    setPickerFeedback(
-      `Picked ${selectedRecipes.length} recipe${pluralize(selectedRecipes.length)} because that is all that remained this round. The next pick starts over automatically.`,
-      "ok",
-    );
-    return;
+  if (missingSlots.length) {
+    feedbackParts.push(`${formatSlotList(missingSlots)} ${missingSlots.length === 1 ? "has" : "have"} no saved recipes yet.`);
   }
 
-  if (!remainingRecipes) {
-    setPickerFeedback(
-      `Picked ${selectedRecipes.length} recipe${pluralize(selectedRecipes.length)}. That completed the round, so the next pick will start over automatically.`,
-      "ok",
-    );
-    return;
-  }
-
-  setPickerFeedback(
-    `Picked ${selectedRecipes.length} recipe${pluralize(selectedRecipes.length)} without repeats.`,
-    "ok",
-  );
+  setPickerFeedback(feedbackParts.join(" "), "ok");
 }
 
 function markRecipeUsed(recipeId) {
+  const recipe = state.recipes.find((item) => item.id === recipeId);
   state.cycle.usedRecipeIds = uniqueIds([...state.cycle.usedRecipeIds, recipeId]);
   state.cycle.currentPickIds = state.cycle.currentPickIds.filter((id) => id !== recipeId);
   saveState();
   render();
 
-  if (!getAvailableRecipes().length) {
+  if (recipe && !getAvailableRecipes(recipe.mealType).length) {
     setPickerFeedback(
-      "Recipe marked used. That finished the round, and the next pick will start over automatically.",
+      `Recipe marked used. The next ${getMealTypeLabel(recipe.mealType).toLowerCase()} pick will start a fresh slot round automatically.`,
       "ok",
     );
     return;
@@ -684,7 +754,17 @@ function syncFilterControls() {
 }
 
 function syncPickerControls() {
-  dom.pickerCount.value = String(state.picker.pickCount);
+  const selectedSlots = new Set(
+    normalizePickerSlots(state.picker.selectedSlots, { fallbackToDefault: false }),
+  );
+  for (const checkbox of dom.pickerSlots) {
+    checkbox.checked = selectedSlots.has(normalizeMealType(checkbox.value));
+  }
+}
+
+function handlePickerSlotChange() {
+  state.picker.selectedSlots = getSelectedPickerSlotsFromDom();
+  saveState();
 }
 
 function render() {
@@ -709,11 +789,11 @@ function renderHero() {
 
   if (!totalRecipes) {
     dom.poolStatusDisplay.textContent =
-      "Recipes stay saved until you remove them yourself, and rounds restart automatically.";
+      "Recipes stay saved until you remove them yourself, and each meal slot restarts automatically.";
     return;
   }
 
-  dom.poolStatusDisplay.textContent = `${availableRecipes} ready this round, ${usedRecipes} already used. Nothing disappears after it gets picked.`;
+  dom.poolStatusDisplay.textContent = `${availableRecipes} ready across the active slot rounds, ${usedRecipes} already used. Nothing disappears after it gets picked.`;
 }
 
 function renderStats() {
@@ -734,7 +814,7 @@ function renderCurrentPicks() {
   if (!currentRecipes.length) {
     const emptyCopy = document.createElement("p");
     emptyCopy.className = "empty-copy";
-    emptyCopy.textContent = "No picks yet. Tap Pick Recipes to choose from the list.";
+    emptyCopy.textContent = DEFAULT_EMPTY_PICKS;
     dom.currentPicks.append(emptyCopy);
     return;
   }
@@ -784,7 +864,7 @@ function renderBoardHeading() {
   }
 
   dom.boardCopy.textContent =
-    `${visibleCount} recipe${pluralize(visibleCount)} shown. Meal slot tags are optional organization only; picks come from one big saved list.`;
+    `${visibleCount} recipe${pluralize(visibleCount)} shown. Day picks use the meal slot tags you choose and rotate within each slot before repeating.`;
 }
 
 function renderBoard() {
@@ -824,10 +904,12 @@ function renderRecipeCard(recipe) {
   const ingredients = fragment.querySelector(".ingredient-chips");
   const links = fragment.querySelector(".video-link-row");
   const embeds = fragment.querySelector(".embed-stack");
+  const expandButton = fragment.querySelector(".expand");
   const toggleButton = fragment.querySelector(".toggle");
   const editButton = fragment.querySelector(".edit");
   const removeButton = fragment.querySelector(".remove");
   const status = getRecipeStatus(recipe);
+  const isCollapsible = isRecipeCardCollapsible(recipe);
 
   card.classList.add(`is-${status}`);
   renderRecipeImage(imageShell, image, recipe.image, recipe.title);
@@ -841,6 +923,14 @@ function renderRecipeCard(recipe) {
   renderIngredients(ingredients, recipe.ingredients);
   renderLinks(links, recipe.links);
   renderEmbeds(embeds, recipe.links);
+  if (isCollapsible) {
+    expandButton.classList.remove("hidden");
+    setRecipeCardExpanded(card, expandButton, false);
+    expandButton.addEventListener("click", () => {
+      const expanded = !card.classList.contains("is-expanded");
+      setRecipeCardExpanded(card, expandButton, expanded);
+    });
+  }
 
   if (status === "available") {
     toggleButton.textContent = "Mark Used";
@@ -937,8 +1027,22 @@ function getVisibleRecipes() {
   return state.recipes.filter((recipe) => matchesFilters(recipe));
 }
 
-function getAvailableRecipes() {
-  return state.recipes.filter((recipe) => getRecipeStatus(recipe) === "available");
+function getAvailableRecipes(mealType = null) {
+  return state.recipes.filter((recipe) => {
+    if (mealType && recipe.mealType !== mealType) {
+      return false;
+    }
+
+    return getRecipeStatus(recipe) === "available";
+  });
+}
+
+function resetRoundForMealType(mealType) {
+  const slotRecipeIds = new Set(
+    state.recipes.filter((recipe) => recipe.mealType === mealType).map((recipe) => recipe.id),
+  );
+  state.cycle.usedRecipeIds = state.cycle.usedRecipeIds.filter((id) => !slotRecipeIds.has(id));
+  state.cycle.currentPickIds = state.cycle.currentPickIds.filter((id) => !slotRecipeIds.has(id));
 }
 
 function matchesFilters(recipe) {
@@ -1053,7 +1157,7 @@ function buildShareUrl() {
 function buildExportPayload() {
   return {
     app: "sufra-recipes",
-    version: 2,
+    version: 3,
     collection: {
       title: APP_TITLE,
     },
@@ -1145,7 +1249,9 @@ function readSharedPayloadFromLocation() {
 
 function handleHashChange() {
   pendingSharedPayload = readSharedPayloadFromLocation();
-  renderSharedNotice();
+  if (!tryAutoImportSharedPayload()) {
+    renderSharedNotice();
+  }
 }
 
 function renderSharedNotice() {
@@ -1156,7 +1262,7 @@ function renderSharedNotice() {
   }
 
   const count = pendingSharedPayload.recipes.length;
-  dom.sharedBannerText.textContent = `${count} shared recipe${pluralize(count)} are ready to import.`;
+  dom.sharedBannerText.textContent = `${count} shared recipe${pluralize(count)} ${count === 1 ? "is" : "are"} ready to import.`;
   dom.sharedBanner.classList.remove("hidden");
 }
 
@@ -1178,6 +1284,84 @@ async function copyText(value) {
   try {
     await navigator.clipboard.writeText(value);
     return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+async function readSharedPayloadFromClipboard() {
+  if (!navigator.clipboard?.readText) {
+    return null;
+  }
+
+  try {
+    const value = await navigator.clipboard.readText();
+    return decodeSharedInput(value);
+  } catch (error) {
+    return null;
+  }
+}
+
+function openImportFilePicker() {
+  dom.importPoolFile.value = "";
+  dom.importPoolFile.click();
+}
+
+async function handleImportFileSelection(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+
+  if (!file) {
+    return;
+  }
+
+  try {
+    const contents = await readFileAsText(file);
+    const payload = decodeSharedInput(contents);
+
+    if (!payload) {
+      setShareFeedback("That JSON file could not be read.", "warn");
+      return;
+    }
+
+    importSharedPayload(payload, {
+      successMessage: "Recipes imported from the JSON file.",
+    });
+  } catch (error) {
+    setShareFeedback("That JSON file could not be read.", "warn");
+  }
+}
+
+function tryAutoImportSharedPayload() {
+  if (!pendingSharedPayload || state.recipes.length) {
+    return false;
+  }
+
+  return importSharedPayload(pendingSharedPayload, {
+    skipConfirm: true,
+    successMessage: "Shared recipes imported from the link.",
+  });
+}
+
+function createJsonFile(filename, contents) {
+  if (typeof File !== "function") {
+    return null;
+  }
+
+  try {
+    return new File([contents], filename, { type: "application/json" });
+  } catch (error) {
+    return null;
+  }
+}
+
+function canShareFiles(files) {
+  if (!navigator.canShare || !Array.isArray(files) || !files.length) {
+    return false;
+  }
+
+  try {
+    return navigator.canShare({ files });
   } catch (error) {
     return false;
   }
@@ -1323,6 +1507,15 @@ function readFileAsDataUrl(file) {
     reader.onload = () => resolve(String(reader.result || ""));
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
+  });
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
   });
 }
 
@@ -1547,6 +1740,13 @@ function getMealTypeLabel(value) {
   return MEAL_TYPES.find((type) => type.key === value)?.label || "Dinner";
 }
 
+function getSelectedPickerSlotsFromDom() {
+  return normalizePickerSlots(
+    dom.pickerSlots.filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.value),
+    { fallbackToDefault: false },
+  );
+}
+
 function normalizeMealType(value) {
   return MEAL_TYPES.some((type) => type.key === value) ? value : "dinner";
 }
@@ -1559,13 +1759,18 @@ function normalizeAvailability(value) {
   return value === "available" || value === "used" ? value : "all";
 }
 
-function normalizePickCount(value) {
-  const parsedValue = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsedValue)) {
-    return 1;
+function normalizePickerSlots(value, options = {}) {
+  const normalizedSlots = uniqueIds(
+    (Array.isArray(value) ? value : [])
+      .map((slot) => String(slot || "").trim())
+      .filter((slot) => MEAL_TYPES.some((type) => type.key === slot)),
+  );
+
+  if (normalizedSlots.length) {
+    return normalizedSlots;
   }
 
-  return Math.min(4, Math.max(1, parsedValue));
+  return options.fallbackToDefault === false ? [] : [...DEFAULT_PICKER_SLOTS];
 }
 
 function normalizePrepMinutes(value) {
@@ -1702,8 +1907,41 @@ function slugify(value) {
   );
 }
 
+function formatSlotList(slots) {
+  const labels = dedupeTextEntries(slots);
+  if (!labels.length) {
+    return "";
+  }
+
+  if (labels.length === 1) {
+    return labels[0];
+  }
+
+  if (labels.length === 2) {
+    return `${labels[0]} and ${labels[1]}`;
+  }
+
+  return `${labels.slice(0, -1).join(", ")}, and ${labels.at(-1)}`;
+}
+
 function pluralize(count) {
   return count === 1 ? "" : "s";
+}
+
+function isRecipeCardCollapsible(recipe) {
+  return (
+    getRecipeSummary(recipe).length > COLLAPSED_NOTES_LIMIT ||
+    recipe.ingredients.length > COLLAPSED_INGREDIENT_LIMIT ||
+    recipe.links.length > COLLAPSED_LINK_LIMIT ||
+    recipe.links.some((link) => Boolean(getEmbedDetails(link.url)))
+  );
+}
+
+function setRecipeCardExpanded(card, button, expanded) {
+  card.classList.toggle("is-expanded", expanded);
+  card.classList.toggle("is-collapsed", !expanded);
+  button.textContent = expanded ? "Show Less" : "Show More";
+  button.setAttribute("aria-expanded", String(expanded));
 }
 
 function registerServiceWorker() {
