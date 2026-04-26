@@ -6,6 +6,7 @@ It includes:
 - One permanent saved recipe list
 - One optional image per recipe
 - User-added recipe links for videos, blog posts, or other references
+- An automatic grocery list built from today's picks or the full saved recipe library
 - Automatic no-repeat rounds that restart after every saved recipe has been used once
 - Optional no-login cloud sync with one-time device pairing codes
 - Manual `Mark Used` and `Make Available` controls
@@ -27,8 +28,9 @@ No dependencies are required.
 4. Use `Edit Recipe` on any saved card to bring it back into the form.
 5. Use `Generate Today` to draw from the saved list for only the meal slots you want.
 6. The app will avoid repeats until every saved recipe has had a turn.
-7. After the round ends, the next pick starts a fresh round automatically.
-8. Use `Share Recipes` or `Export JSON` to move the list to another device.
+7. Use the grocery list section to copy or check off ingredients from today's picks or the whole library.
+8. After the round ends, the next pick starts a fresh round automatically.
+9. Use `Share Recipes` or `Export JSON` to move the list to another device.
 
 ## Data storage
 

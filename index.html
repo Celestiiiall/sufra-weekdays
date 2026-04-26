@@ -8,9 +8,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Sufra Recipes" />
     <title>Sufra Recipes</title>
-    <link rel="manifest" href="manifest.webmanifest?v=20260320-14" />
-    <link rel="icon" href="icon.svg?v=20260320-14" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="icon.svg?v=20260320-14" />
+    <link rel="manifest" href="manifest.webmanifest?v=20260320-15" />
+    <link rel="icon" href="icon.svg?v=20260320-15" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon.svg?v=20260320-15" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -29,7 +29,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260320-14" />
+    <link rel="stylesheet" href="styles.css?v=20260320-15" />
   </head>
   <body>
     <div class="page-glow glow-a"></div>
@@ -191,6 +191,33 @@
                 Ingredients can be added one per line or separated by commas or semicolons. One optional image can be added to each recipe and changed later by tapping Edit Recipe on a saved card.
               </p>
             </form>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="section-kicker">Grocery list</p>
+                <h2>Auto Grocery List</h2>
+              </div>
+              <p class="section-copy">
+                Ingredients roll up automatically from either today&apos;s picked meals or your full saved library. The list updates as recipes change.
+              </p>
+            </div>
+
+            <div class="button-row">
+              <button id="grocery-source-current" class="ghost" type="button">Today&apos;s Picks</button>
+              <button id="grocery-source-all" class="ghost" type="button">All Saved Recipes</button>
+              <button id="copy-grocery-list" class="ghost" type="button">Copy List</button>
+              <button id="clear-grocery-checks" class="ghost danger" type="button">Clear Checks</button>
+            </div>
+
+            <p id="grocery-summary" class="helper-line">
+              No grocery items yet.
+            </p>
+
+            <div id="grocery-list" class="grocery-list" aria-live="polite">
+              <p class="empty-copy">Pick meals or add recipes with ingredients to build the grocery list.</p>
+            </div>
           </section>
         </div>
 
@@ -414,8 +441,8 @@
       </article>
     </template>
 
-    <script src="sync-config-v14.js?v=20260320-14"></script>
-    <script src="sync-client-v14.js?v=20260320-14"></script>
-    <script src="app-sync-v14.js?v=20260320-14"></script>
+    <script src="sync-config-v14.js?v=20260320-15"></script>
+    <script src="sync-client-v14.js?v=20260320-15"></script>
+    <script src="app-sync-v15.js?v=20260320-15"></script>
   </body>
 </html>

@@ -18,6 +18,7 @@ const librariesCollection = firestore.collection("libraries");
 const devicesCollection = firestore.collection("devices");
 const pairingCodesCollection = firestore.collection("pairingCodes");
 const MEAL_TYPES = new Set(["breakfast", "lunch", "dinner", "snack"]);
+const DEFAULT_GROCERY_SOURCE = "all";
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -238,6 +239,7 @@ async function replaceLibraryState(libraryId, rawState, options = {}) {
     ref: libraryRef.collection("meta").doc("state"),
     value: {
       cycle: appState.cycle,
+      grocery: appState.grocery,
       picker: appState.picker,
       filters: appState.filters,
       updatedAt: FieldValue.serverTimestamp(),
@@ -283,12 +285,13 @@ async function loadLibraryState(libraryId) {
 
   return normalizeAppState({
     app: "sufra-recipes",
-    version: 4,
+    version: 5,
     collection: {
       title: libraryData.title || APP_TITLE,
     },
     recipes,
     cycle: meta.cycle,
+    grocery: meta.grocery,
     picker: meta.picker,
     filters: meta.filters,
   });
@@ -378,7 +381,7 @@ function normalizeAppState(raw) {
 
   return {
     app: "sufra-recipes",
-    version: 4,
+    version: 5,
     collection: {
       title: normalizeTitle(raw?.collection?.title, APP_TITLE, 80),
     },
@@ -386,6 +389,10 @@ function normalizeAppState(raw) {
     cycle: {
       usedRecipeIds,
       currentPickIds,
+    },
+    grocery: {
+      source: normalizeGrocerySource(raw?.grocery?.source),
+      checkedKeys: normalizeCheckedKeys(raw?.grocery?.checkedKeys),
     },
     picker: {
       selectedSlots: normalizePickerSlots(raw?.picker?.selectedSlots),
@@ -514,6 +521,18 @@ function normalizeAvailability(value) {
   return value === "available" || value === "used" ? value : "all";
 }
 
+function normalizeGrocerySource(value) {
+  return value === "all" ? "all" : DEFAULT_GROCERY_SOURCE;
+}
+
+function normalizeCheckedKeys(value) {
+  return uniqueIds(
+    (Array.isArray(value) ? value : [])
+      .map((item) => normalizeIngredientKey(item))
+      .filter(Boolean),
+  );
+}
+
 function normalizeParagraph(value, limit) {
   return String(value || "")
     .replace(/\s+/g, " ")
@@ -528,6 +547,14 @@ function normalizeTitle(value, fallback, limit = 80) {
     .slice(0, limit);
 
   return normalizedValue || fallback;
+}
+
+function normalizeIngredientKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
 }
 
 function normalizeIsoDate(value) {
